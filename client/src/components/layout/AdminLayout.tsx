@@ -66,7 +66,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "bg-black border-r border-border/30 flex flex-col h-full transition-all duration-300 ease-in-out", 
+          "bg-zinc-950 border-r border-border/30 flex flex-col h-full transition-all duration-300 ease-in-out shadow-lg", 
           collapsed ? "w-16" : "w-64"
         )}
       >
@@ -94,9 +94,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto scrollbar-hide">
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
-              <a
+              <div
                 className={cn(
-                  "flex items-center py-2 px-3 rounded-md transition-all duration-200 group relative overflow-hidden",
+                  "flex items-center py-2 px-3 rounded-md transition-all duration-200 group relative overflow-hidden cursor-pointer",
                   location === item.href 
                     ? "bg-primary/10 text-primary" 
                     : "text-muted-foreground hover:bg-primary/5 hover:text-primary",
@@ -131,7 +131,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     {item.label}
                   </div>
                 )}
-              </a>
+              </div>
             </Link>
           ))}
         </nav>
@@ -185,8 +185,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </aside>
       
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto bg-black/90 p-6">
-        <div className="border border-border/10 bg-black rounded-md p-4 min-h-[calc(100vh-3rem)]">
+      <main className="flex-1 overflow-y-auto bg-zinc-900 p-6 bg-grid">
+        <div className="bg-zinc-950/90 border border-border/10 rounded-lg p-6 min-h-[calc(100vh-3rem)] shadow-lg">
           {children}
         </div>
       </main>
