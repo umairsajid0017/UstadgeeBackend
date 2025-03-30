@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, User, Bell } from "lucide-react";
+import { Search, User } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link } from "wouter";
-import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import NotificationCenter from "@/components/notifications/NotificationCenter";
 
 interface HeaderProps {
   title: string;

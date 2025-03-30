@@ -20,15 +20,20 @@ export const users = pgTable('users', {
   token: text('token'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   userTypeId: integer('user_type').notNull(),
+  referralCode: varchar('referral_code', { length: 20 }),
+  referredBy: integer('referred_by'),
   latitude: varchar('latitude', { length: 500 }).notNull(),
   longitude: varchar('longitude', { length: 500 }).notNull(),
   cnicFrontImg: varchar('cnic_front_img', { length: 500 }).notNull(),
   cnicBackImg: varchar('cnic_back_img', { length: 500 }).notNull(),
   cnicNum: varchar('cnic_num', { length: 500 }).notNull(),
+  notificationPermission: varchar('notification_permission', { length: 20 }).default('default'),
+  deviceToken: varchar('device_token', { length: 500 }),
 }, (table) => {
   return {
     phoneNumberIdx: index('phone_number_idx').on(table.phoneNumber),
     userTypeIdx: index('user_type_idx').on(table.userTypeId),
+    referredByIdx: index('referred_by_idx').on(table.referredBy),
   };
 });
 
@@ -256,6 +261,9 @@ export const registerUserSchema = z.object({
   fullName: z.string().min(3).max(50),
   password: z.string().min(6).max(100),
   userTypeId: z.number().int().min(1).max(3),
+  referralCode: z.string().optional(),
+  notificationPermission: z.string().optional().default("default"),
+  deviceToken: z.string().optional(),
   profileImage: z.string().optional(),
   imageData: z.string().optional(),
   imageName: z.string().optional(),

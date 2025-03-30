@@ -1,226 +1,222 @@
 import React, { useState, useEffect } from 'react';
-import { useWebSocketContext } from '@/contexts/WebSocketContext';
-import { useAuth } from '@/hooks/use-auth';
 import { 
   Popover, 
   PopoverContent, 
   PopoverTrigger 
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { BellIcon, BellOff, Check } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription,
+  CardFooter,
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
+import { Bell, Check, CheckCheck, Trash } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card } from '@/components/ui/card';
-import { apiRequest } from '@/lib/queryClient';
-import { format } from 'date-fns';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { useQuery, useMutation, UseQueryResult } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useAuth } from '@/hooks/use-auth';
+import { useWebSocketContext } from '@/contexts/WebSocketContext';
 
 type Notification = {
   id: number;
-  userId: number;
   title: string;
-  message: string;
-  isRead: boolean;
-  timeStamp: string;
-  type: string;
-  linkId?: number;
+  type: number;
+  time_stamp: string;
+  username: string;
+  username_notifier: string;
+  post_id: number;
+  is_read: number;
 };
 
-export function NotificationCenter() {
+export default function NotificationCenter() {
   const { user } = useAuth();
-  const { onMessage, requestNotificationPermission } = useWebSocketContext();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-
-  // Fetch notifications from the server
-  useEffect(() => {
-    if (user?.id) {
-      const fetchNotifications = async () => {
-        try {
-          setLoading(true);
-          const response = await apiRequest('GET', '/api/notifications');
-          const data = await response.json();
-          
-          if (data.success && Array.isArray(data.notifications)) {
-            setNotifications(data.notifications);
-            // Count unread notifications
-            setUnreadCount(data.notifications.filter((n: Notification) => !n.isRead).length);
-          }
-        } catch (error) {
-          console.error('Error fetching notifications:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-      fetchNotifications();
-    }
-  }, [user?.id]);
-
+  const { onMessage } = useWebSocketContext();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // Query to fetch notifications
+  const { 
+    data, 
+    isLoading, 
+    error 
+  }: UseQueryResult<{ success: boolean; notifications: Notification[] }> = useQuery({
+    queryKey: ['/api/notifications'],
+    enabled: !!user,
+  });
+  
+  // Filter unread notifications
+  const unreadCount = data?.notifications?.filter(n => n.is_read === 0).length || 0;
+  
+  // Mark notification as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId: number) => {
+      const res = await apiRequest('PUT', `/api/notification/${notificationId}`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    },
+  });
+  
+  // Mark all notifications as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('PUT', '/api/notifications/markAllRead', {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    },
+  });
+  
   // Listen for new notifications via WebSocket
   useEffect(() => {
     const unsubscribe = onMessage('notification', (data) => {
-      // Add new notification to the list
-      const newNotification: Notification = {
-        id: data.id || Date.now(),
-        userId: user?.id || 0,
-        title: data.title,
-        message: data.message,
-        isRead: false,
-        timeStamp: data.timestamp || new Date().toISOString(),
-        type: data.type || 'info',
-        linkId: data.linkId
-      };
-      
-      setNotifications(prev => [newNotification, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      // Invalidate the notifications query to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
     });
     
-    return unsubscribe;
-  }, [onMessage, user?.id]);
-
-  // Mark a single notification as read
-  const markAsRead = async (id: number) => {
-    try {
-      await apiRequest('PUT', `/api/notification/${id}`, { isRead: true });
-      
-      // Update local state
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === id ? { ...notif, isRead: true } : notif
-        )
-      );
-      
-      // Update unread count
-      setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
-
-  // Mark all notifications as read
-  const markAllAsRead = async () => {
-    if (unreadCount === 0) return;
-    
-    try {
-      await apiRequest('PUT', '/api/notifications/markAllRead', {});
-      
-      // Update local state
-      setNotifications(prev => 
-        prev.map(notif => ({ ...notif, isRead: true }))
-      );
-      
-      // Reset unread count
-      setUnreadCount(0);
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-    }
-  };
-
-  // Request notification permission
-  const handleRequestPermission = async () => {
-    await requestNotificationPermission();
-  };
-
-  // Format the timestamp
+    return () => {
+      unsubscribe();
+    };
+  }, [onMessage]);
+  
+  // Format timestamp to a more readable format
   const formatTimestamp = (timestamp: string) => {
-    try {
-      const date = new Date(timestamp);
-      return format(date, 'MMM d, h:mm a');
-    } catch (e) {
-      return '';
+    const date = new Date(timestamp);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+  
+  // Get notification type label
+  const getNotificationType = (type: number) => {
+    switch (type) {
+      case 1: return 'Service';
+      case 2: return 'Task';
+      case 3: return 'Chat';
+      case 4: return 'Review';
+      default: return 'System';
     }
   };
-
+  
+  // Get notification background based on type
+  const getNotificationBackground = (type: number, isRead: number) => {
+    if (isRead === 1) return 'bg-muted/30';
+    
+    switch (type) {
+      case 1: return 'bg-blue-50 dark:bg-blue-950/20';
+      case 2: return 'bg-green-50 dark:bg-green-950/20';
+      case 3: return 'bg-purple-50 dark:bg-purple-950/20';
+      case 4: return 'bg-orange-50 dark:bg-orange-950/20';
+      default: return 'bg-gray-50 dark:bg-gray-900/20';
+    }
+  };
+  
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="relative"
-          aria-label="Notifications"
-        >
-          <BellIcon className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 text-xs"
-            >
-              {unreadCount > 99 ? '99+' : unreadCount}
+            <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center">
+              {unreadCount}
             </Badge>
           )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h4 className="font-medium">Notifications</h4>
-          <div className="flex gap-2">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={handleRequestPermission}
-              className="h-7 w-7"
-              title="Enable browser notifications"
-            >
-              <BellOff className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={markAllAsRead}
-              disabled={unreadCount === 0}
-              className="h-7 w-7"
-              title="Mark all as read"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        
-        <ScrollArea className="h-[350px]">
-          {loading ? (
-            <div className="flex justify-center items-center h-20">
-              <p className="text-muted-foreground">Loading notifications...</p>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="flex justify-center items-center h-20">
-              <p className="text-muted-foreground">No notifications</p>
-            </div>
-          ) : (
-            <div className="space-y-1 p-1">
-              {notifications.map((notification) => (
-                <Card 
-                  key={notification.id}
-                  className={`p-3 cursor-pointer hover:bg-accent transition-colors ${
-                    !notification.isRead ? 'border-l-4 border-l-primary' : ''
-                  }`}
-                  onClick={() => {
-                    if (!notification.isRead) {
-                      markAsRead(notification.id);
-                    }
-                    // Handle navigation based on notification type if needed
-                    if (notification.linkId) {
-                      setOpen(false);
-                      // Would typically navigate to a specific page based on notification.type and linkId
-                    }
-                  }}
+        <Card className="border-0">
+          <CardHeader className="py-3">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg">Notifications</CardTitle>
+              {unreadCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 px-2 text-xs" 
+                  onClick={() => markAllAsReadMutation.mutate()}
+                  disabled={markAllAsReadMutation.isPending}
                 >
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-start">
-                      <h5 className="font-medium text-sm">{notification.title}</h5>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTimestamp(notification.timeStamp)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{notification.message}</p>
-                  </div>
-                </Card>
-              ))}
+                  <CheckCheck className="h-4 w-4 mr-1" />
+                  Mark all read
+                </Button>
+              )}
             </div>
-          )}
-        </ScrollArea>
+            <CardDescription>
+              {unreadCount > 0 
+                ? `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`
+                : 'No new notifications'}
+            </CardDescription>
+          </CardHeader>
+          <ScrollArea className="h-[320px]">
+            <CardContent className="p-0">
+              {isLoading ? (
+                <div className="flex items-center justify-center h-40">
+                  <p className="text-muted-foreground">Loading notifications...</p>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center h-40">
+                  <p className="text-destructive">Failed to load notifications</p>
+                </div>
+              ) : data?.notifications?.length ? (
+                <div className="space-y-1">
+                  {data.notifications.map((notification) => (
+                    <div 
+                      key={notification.id} 
+                      className={`px-4 py-3 ${getNotificationBackground(notification.type, notification.is_read)}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="px-1 py-0 h-5 text-xs">
+                              {getNotificationType(notification.type)}
+                            </Badge>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTimestamp(notification.time_stamp)}
+                            </p>
+                          </div>
+                          <h4 className="text-sm font-semibold mt-1">{notification.title}</h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            From: {notification.username_notifier}
+                          </p>
+                        </div>
+                        {notification.is_read === 0 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => markAsReadMutation.mutate(notification.id)}
+                            disabled={markAsReadMutation.isPending}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-40">
+                  <p className="text-muted-foreground">No notifications yet</p>
+                </div>
+              )}
+            </CardContent>
+          </ScrollArea>
+          <Separator />
+          <CardFooter className="p-2 flex justify-center">
+            <Button variant="ghost" size="sm" className="text-xs">
+              View all notifications
+            </Button>
+          </CardFooter>
+        </Card>
       </PopoverContent>
     </Popover>
   );

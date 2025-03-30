@@ -1,5 +1,5 @@
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { PrismaClient } from '@prisma/client';
 
 // Create a Prisma client instance for compatibility with existing code
@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 // Create a Drizzle client as well
 const connectionString = process.env.DATABASE_URL || '';
-const sql = neon(connectionString);
-export const db = drizzle(sql);
+const client = postgres(connectionString);
+export const db = drizzle(client);
 
 export default prisma;

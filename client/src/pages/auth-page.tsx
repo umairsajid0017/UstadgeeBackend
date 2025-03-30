@@ -33,6 +33,8 @@ const registerSchema = z.object({
   userTypeId: z.number({
     required_error: "Please select a user type",
   }),
+  referralCode: z.string().optional(),
+  notificationPermission: z.string().default("default"),
 });
 
 export default function AuthPage() {
@@ -57,6 +59,8 @@ export default function AuthPage() {
       fullName: "",
       password: "",
       userTypeId: 1, // Default to regular user
+      referralCode: "",
+      notificationPermission: "default",
     },
   });
   
@@ -259,6 +263,29 @@ export default function AuthPage() {
                         )}
                       />
                       
+                      {/* Referral Code - Only show for Karigar (worker) users */}
+                      {registerForm.watch("userTypeId") === 3 && (
+                        <FormField
+                          control={registerForm.control}
+                          name="referralCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Referral Code (Optional)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  placeholder="Enter Ustad's referral code" 
+                                  {...field} 
+                                />
+                              </FormControl>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Enter an Ustad's referral code to link your account
+                              </p>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
                       <div className="space-y-2">
                         <FormLabel>Profile Picture</FormLabel>
                         <Input 
@@ -276,6 +303,76 @@ export default function AuthPage() {
                           </div>
                         )}
                       </div>
+                      
+                      <FormField
+                        control={registerForm.control}
+                        name="notificationPermission"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Notification Settings</FormLabel>
+                            <FormControl>
+                              <div className="space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    id="notifications-all"
+                                    value="all"
+                                    checked={field.value === "all"}
+                                    onChange={() => field.onChange("all")}
+                                    className="h-4 w-4 text-primary border-gray-300"
+                                  />
+                                  <label htmlFor="notifications-all" className="text-sm">
+                                    All Notifications
+                                  </label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    id="notifications-important"
+                                    value="important"
+                                    checked={field.value === "important"}
+                                    onChange={() => field.onChange("important")}
+                                    className="h-4 w-4 text-primary border-gray-300"
+                                  />
+                                  <label htmlFor="notifications-important" className="text-sm">
+                                    Important Only
+                                  </label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    id="notifications-default"
+                                    value="default"
+                                    checked={field.value === "default"}
+                                    onChange={() => field.onChange("default")}
+                                    className="h-4 w-4 text-primary border-gray-300"
+                                  />
+                                  <label htmlFor="notifications-default" className="text-sm">
+                                    Default Settings
+                                  </label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    id="notifications-none"
+                                    value="none"
+                                    checked={field.value === "none"}
+                                    onChange={() => field.onChange("none")}
+                                    className="h-4 w-4 text-primary border-gray-300"
+                                  />
+                                  <label htmlFor="notifications-none" className="text-sm">
+                                    No Notifications
+                                  </label>
+                                </div>
+                              </div>
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              You can change these settings later in your profile
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       
                       <Button 
                         type="submit" 

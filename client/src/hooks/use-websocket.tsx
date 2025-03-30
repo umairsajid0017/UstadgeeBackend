@@ -199,6 +199,7 @@ export function useWebSocket() {
   
   return {
     status,
+    connected: status === 'connected',
     sendMessage,
     onMessage,
     requestNotificationPermission,

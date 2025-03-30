@@ -183,22 +183,27 @@ model user_type {
 }
 
 model users {
-  id             Int      @id @default(autoincrement())
-  phone_number   String   @unique(map: "users_phone_number_unique") @db.VarChar(500)
-  full_name      String   @db.VarChar(500)
-  profile_image  String   @db.VarChar(500)
-  password       String   @db.VarChar(500)
-  auth           String   @db.VarChar(500)
-  active         Int      @default(1)
-  token          String?
-  created_at     DateTime @default(now()) @db.Timestamp(6)
-  user_type      Int
-  latitude       String   @db.VarChar(500)
-  longitude      String   @db.VarChar(500)
-  cnic_front_img String   @db.VarChar(500)
-  cnic_back_img  String   @db.VarChar(500)
-  cnic_num       String   @db.VarChar(500)
+  id                    Int      @id @default(autoincrement())
+  phone_number          String   @unique(map: "users_phone_number_unique") @db.VarChar(500)
+  full_name             String   @db.VarChar(500)
+  profile_image         String   @db.VarChar(500)
+  password              String   @db.VarChar(500)
+  auth                  String   @db.VarChar(500)
+  active                Int      @default(1)
+  token                 String?
+  created_at            DateTime @default(now()) @db.Timestamp(6)
+  user_type             Int
+  referral_code         String?  @db.VarChar(20)
+  referred_by           Int?
+  notification_permission String? @default("default") @db.VarChar(20)
+  device_token          String?  @db.VarChar(500)
+  latitude              String   @db.VarChar(500)
+  longitude             String   @db.VarChar(500)
+  cnic_front_img        String   @db.VarChar(500)
+  cnic_back_img         String   @db.VarChar(500)
+  cnic_num              String   @db.VarChar(500)
 
   @@index([phone_number], map: "phone_number_idx")
   @@index([user_type], map: "user_type_idx")
+  @@index([referred_by], map: "referred_by_idx")
 }

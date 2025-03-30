@@ -5,6 +5,7 @@ import path from 'path';
 import multer from 'multer';
 import { promises as fsPromises } from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
+import prisma from './db';
 
 // Auth middleware
 import { authenticate, isServiceProvider, isUser, isAdmin } from "./middleware/auth";
@@ -153,6 +154,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/profile", authenticate, uploadProfileImage.single('profileImage'), updateUserProfile);
   app.put("/api/location", authenticate, updateUserLocation);
   app.get("/api/search/users", authenticate, searchUsers);
+  
+  // Notification permissions endpoint
+  app.put("/api/notification-permission", authenticate, async (req, res) => {
+    try {
+      const { permission, deviceToken } = req.body;
+      
+      // @ts-ignore - user is added by auth middleware
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      
+      // Update the user's notification permission
+      await prisma.users.update({
+        where: { id: userId },
+        data: { 
+          notification_permission: permission,
+          device_token: deviceToken || undefined
+        }
+      });
+      
+      res.json({ success: true, message: 'Notification permission updated' });
+    } catch (error) {
+      console.error('Update notification permission error:', error);
+      res.status(500).json({ success: false, message: 'Server error' });
+    }
+  });
 
   const httpServer = createServer(app);
   
@@ -166,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('New WebSocket connection established');
     let userId: number | null = null;
     
-    ws.on('message', (message: string) => {
+    ws.on('message', async (message: string) => {
       try {
         const data = JSON.parse(message.toString());
         
@@ -213,12 +242,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Handle notification permission request
         else if (data.type === 'notification_permission') {
           if (userId) {
+            const { permission, deviceToken } = data;
+            
             // Update user's notification permission in database
-            // For now, just acknowledge
-            ws.send(JSON.stringify({
-              type: 'notification_permission_update',
-              status: 'success'
-            }));
+            try {
+              await prisma.users.update({
+                where: { id: userId },
+                data: { 
+                  notification_permission: permission,
+                  device_token: deviceToken || undefined
+                }
+              });
+              
+              ws.send(JSON.stringify({
+                type: 'notification_permission_update',
+                status: 'success',
+                permission: permission
+              }));
+            } catch (error) {
+              console.error('Failed to update notification permission:', error);
+              ws.send(JSON.stringify({
+                type: 'notification_permission_update',
+                status: 'error',
+                message: 'Failed to update notification permission'
+              }));
+            }
           }
         }
       } catch (error) {
@@ -246,16 +294,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Export broadcast function to send notifications to users
-  (global as any).sendNotification = (userId: number, notification: any) => {
-    if (clients.has(userId)) {
-      clients.get(userId)?.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(JSON.stringify({
-            type: 'notification',
-            ...notification
-          }));
-        }
+  (global as any).sendNotification = async (userId: number, notification: any) => {
+    try {
+      // Check user's notification permission before sending
+      const user = await prisma.users.findUnique({
+        where: { id: userId }
       });
+
+      // Only send if permission is 'all' or 'default' (which means all)
+      // If permission is explicitly 'none', don't send
+      if (user && user.notification_permission !== 'none') {
+        if (clients.has(userId)) {
+          clients.get(userId)?.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(JSON.stringify({
+                type: 'notification',
+                ...notification
+              }));
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error sending notification:', error);
     }
   };
   

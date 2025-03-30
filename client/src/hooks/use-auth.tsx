@@ -13,6 +13,8 @@ type User = {
   fullName: string;
   userTypeId: number;
   profileImage?: string;
+  referralCode?: string;
+  notificationPermission?: string;
 };
 
 type LoginData = {
@@ -27,6 +29,9 @@ type RegisterData = {
   userTypeId: number;
   imageData?: string;
   image_name?: string;
+  referralCode?: string;
+  notificationPermission?: string;
+  deviceToken?: string;
 };
 
 type AuthContextType = {

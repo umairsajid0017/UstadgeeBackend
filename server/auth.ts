@@ -26,10 +26,30 @@ export function generateToken(user: any): string {
   );
 }
 
+// Generate a unique referral code
+function generateReferralCode(length = 8): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
 // Register new user
 export async function register(req: Request, res: Response) {
   try {
-    const { phoneNumber, fullName, password, userTypeId, imageData, image_name } = req.body;
+    const { 
+      phoneNumber, 
+      fullName, 
+      password, 
+      userTypeId, 
+      imageData, 
+      image_name,
+      referralCode, 
+      notificationPermission,
+      deviceToken 
+    } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.users.findUnique({
@@ -39,9 +59,28 @@ export async function register(req: Request, res: Response) {
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User already exists' });
     }
+    
+    // Find referrer if referral code provided
+    let referrerId = null;
+    if (referralCode) {
+      const referrer = await prisma.users.findFirst({
+        where: { 
+          referral_code: {
+            equals: referralCode
+          }
+        }
+      });
+      
+      if (referrer) {
+        referrerId = referrer.id;
+      }
+    }
 
     // Hash password
     const hashedPassword = await hashPassword(password);
+    
+    // Generate a unique referral code for this user if user type is Ustad (2)
+    const newReferralCode = userTypeId === 2 ? generateReferralCode() : null;
 
     // Create the user in database
     const newUser = await prisma.users.create({
@@ -53,6 +92,10 @@ export async function register(req: Request, res: Response) {
         profile_image: image_name || 'default.png',
         auth: 'local',
         active: 1,
+        referral_code: newReferralCode,
+        referred_by: referrerId,
+        notification_permission: notificationPermission || 'default',
+        device_token: deviceToken,
         latitude: '0',
         longitude: '0',
         cnic_front_img: '',
@@ -78,7 +121,9 @@ export async function register(req: Request, res: Response) {
         phoneNumber: newUser.phone_number,
         fullName: newUser.full_name,
         userTypeId: newUser.user_type,
-        profileImage: newUser.profile_image
+        profileImage: newUser.profile_image,
+        referralCode: newUser.referral_code || null,
+        notificationPermission: newUser.notification_permission || 'default'
       }
     });
   } catch (error) {
@@ -124,7 +169,9 @@ export async function login(req: Request, res: Response) {
         phoneNumber: user.phone_number,
         fullName: user.full_name,
         userTypeId: user.user_type,
-        profileImage: user.profile_image
+        profileImage: user.profile_image,
+        referralCode: user.referral_code,
+        notificationPermission: user.notification_permission || 'default'
       },
       token
     });
@@ -179,7 +226,9 @@ export async function getUser(req: Request, res: Response) {
         phoneNumber: user.phone_number,
         fullName: user.full_name,
         userTypeId: user.user_type,
-        profileImage: user.profile_image
+        profileImage: user.profile_image,
+        referralCode: user.referral_code,
+        notificationPermission: user.notification_permission || 'default'
       }
     });
   } catch (error) {
