@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model admins {
+  id         Int      @id @default(autoincrement())
+  email      String   @db.VarChar(500)
+  password   String   @db.VarChar(500)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+}
+
+model app_settings {
+  id    Int    @id @default(autoincrement())
+  label String @db.VarChar(500)
+  value String @db.VarChar(500)
+}
+
+model category {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(500)
+}
+
+model chat_list {
+  id         Int      @id @default(autoincrement())
+  user1      String   @db.VarChar(500)
+  user2      String   @db.VarChar(500)
+  time_stamp DateTime @default(now()) @db.Timestamp(6)
+  deleted_by String?  @default("") @db.VarChar(500)
+  last_msg   String
+  type       String
+
+  @@unique([user1, user2], map: "users_idx")
+}
+
+model cities {
+  id          Int    @id @default(autoincrement())
+  name        String @db.VarChar(255)
+  description String
+  climate     String
+  plane       String
+  bus         String
+  train       String
+  state_id    Int
+  state_code  String @db.VarChar(255)
+  country_id  Int
+  status      Int    @default(1)
+  latitude    String @db.VarChar(15)
+  longitude   String @db.VarChar(15)
+  uploaded_by String @db.VarChar(255)
+
+  @@index([country_id], map: "country_idx")
+  @@index([state_id], map: "state_idx")
+}
+
+model countries {
+  id     Int    @id @default(autoincrement())
+  name   String @db.VarChar(100)
+  status Int    @default(1)
+}
+
+model notification {
+  id                Int      @id @default(autoincrement())
+  title             String   @db.VarChar(500)
+  type              Int
+  time_stamp        DateTime @default(now()) @db.Timestamp(6)
+  username          String   @db.VarChar(500)
+  username_notifier String   @db.VarChar(500)
+  post_id           Int
+  is_read           Int?     @default(0)
+}
+
+model payment_methods {
+  id                 Int      @id @default(autoincrement())
+  service_boosted_id Int
+  payment_method     String   @db.VarChar(500)
+  amount             String   @db.VarChar(500)
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([service_boosted_id], map: "service_boosted_idx")
+}
+
+model reviews {
+  id          Int      @id @default(autoincrement())
+  worker_id   Int
+  rating      Int
+  description String   @db.VarChar(255)
+  user_id     Int
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  @@unique([worker_id, user_id], map: "worker_user_idx")
+  @@index([user_id], map: "review_user_idx")
+  @@index([worker_id], map: "review_worker_idx")
+}
+
+model service_boosted {
+  id             Int      @id @default(autoincrement())
+  service_id     Int
+  day_selected   Int
+  payment_method String   @db.VarChar(500)
+  status         Int      @default(1)
+  amount         Int
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([service_id], map: "boosted_service_idx")
+}
+
+model service_images {
+  id         Int      @id @default(autoincrement())
+  service_id Int
+  image_name String   @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([service_id], map: "service_images_idx")
+}
+
+model service_subCategories {
+  id              Int      @id @default(autoincrement())
+  service_id      Int
+  sub_category_id Int
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([service_id], map: "service_sub_cats_idx")
+  @@index([sub_category_id], map: "sub_category_idx")
+}
+
+model services {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(500)
+  description String
+  charges     Int      @default(0)
+  category_id Int
+  user_id     String   @db.VarChar(255)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([category_id], map: "service_category_idx")
+  @@index([user_id], map: "service_user_idx")
+}
+
+model status {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(500)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+}
+
+model sub_category {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(500)
+  category_id Int
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([category_id], map: "sub_cat_category_idx")
+}
+
+model task_assigns {
+  id                    Int      @id @default(autoincrement())
+  worker_id             String   @db.VarChar(255)
+  user_id               String   @db.VarChar(255)
+  service_id            Int
+  description           String   @db.VarChar(500)
+  est_time              Int
+  total_amount          Int
+  offer_expiration_date DateTime @db.Timestamp(6)
+  status_id             Int
+  created_at            DateTime @default(now()) @db.Timestamp(6)
+  audio_name            String   @db.VarChar(500)
+  cnic                  String   @db.VarChar(500)
+  arrival_time          DateTime @db.Timestamp(6)
+
+  @@index([service_id], map: "task_service_idx")
+  @@index([status_id], map: "task_status_idx")
+  @@index([user_id], map: "task_user_idx")
+  @@index([worker_id], map: "task_worker_idx")
+}
+
+model user_type {
+  id   Int    @id @default(autoincrement())
+  name String @unique(map: "user_type_name_unique") @db.VarChar(500)
+}
+
+model users {
+  id             Int      @id @default(autoincrement())
+  phone_number   String   @unique(map: "users_phone_number_unique") @db.VarChar(500)
+  full_name      String   @db.VarChar(500)
+  profile_image  String   @db.VarChar(500)
+  password       String   @db.VarChar(500)
+  auth           String   @db.VarChar(500)
+  active         Int      @default(1)
+  token          String?
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  user_type      Int
+  latitude       String   @db.VarChar(500)
+  longitude      String   @db.VarChar(500)
+  cnic_front_img String   @db.VarChar(500)
+  cnic_back_img  String   @db.VarChar(500)
+  cnic_num       String   @db.VarChar(500)
+
+  @@index([phone_number], map: "phone_number_idx")
+  @@index([user_type], map: "user_type_idx")
+}

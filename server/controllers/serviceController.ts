@@ -1,381 +1,216 @@
 import { Request, Response } from 'express';
-import { db } from '../db';
-import { 
-  services, 
-  categories, 
-  subCategories,
-  serviceImages,
-  serviceSubCategories,
-  users,
-  serviceBoosted,
-  InsertServiceImage,
-  InsertService,
-  InsertServiceSubCategory
-} from '../../shared/schema';
-import { eq, and, like, desc, inArray, sql } from 'drizzle-orm';
+import prisma from '../db';
 import { calculateDistance } from '../utils/helpers';
 
+// Add a new service
 export async function addService(req: Request, res: Response) {
   try {
-    const userId = req.user?.id;
+    const { title, description, charges, category_id, sub_category_ids, image_names } = req.body;
     
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    const { title, description, category_id, charges } = req.body;
+    // Create service
+    const service = await prisma.services.create({
+      data: {
+        title,
+        description,
+        charges: Number(charges),
+        category_id: Number(category_id),
+        user_id: req.user.phoneNumber
+      }
+    });
     
-    if (!title || !description || !category_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Title, description, and category_id are required'
-      });
-    }
-    
-    // Create the service
-    const [newService] = await db.insert(services).values({
-      title,
-      description,
-      charges: charges ? parseInt(charges, 10) : 0,
-      categoryId: parseInt(category_id, 10),
-      userId: userId.toString(),
-      createdAt: new Date()
-    }).returning({ id: services.id });
-    
-    // Handle service sub-categories if provided
-    if (req.body.subCategories && Array.isArray(req.body.subCategories)) {
-      const subCatInserts: InsertServiceSubCategory[] = req.body.subCategories.map(
-        (subCatId: number) => ({
-          serviceId: newService.id,
-          subCategoryId: subCatId,
-          createdAt: new Date()
-        })
-      );
-      
-      if (subCatInserts.length > 0) {
-        await db.insert(serviceSubCategories).values(subCatInserts);
+    // Add service images
+    if (image_names && Array.isArray(image_names)) {
+      for (const image_name of image_names) {
+        await prisma.service_images.create({
+          data: {
+            service_id: service.id,
+            image_name
+          }
+        });
       }
     }
     
-    // Handle service images if provided
-    if (req.files && Array.isArray(req.files)) {
-      const imageInserts: InsertServiceImage[] = req.files.map(
-        (file: Express.Multer.File) => ({
-          serviceId: newService.id,
-          imageName: file.filename,
-          createdAt: new Date()
-        })
-      );
-      
-      if (imageInserts.length > 0) {
-        await db.insert(serviceImages).values(imageInserts);
+    // Add subcategories
+    if (sub_category_ids && Array.isArray(sub_category_ids)) {
+      for (const sub_category_id of sub_category_ids) {
+        await prisma.service_subCategories.create({
+          data: {
+            service_id: service.id,
+            sub_category_id: Number(sub_category_id)
+          }
+        });
       }
     }
     
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       message: 'Service added successfully',
-      data: { id: newService.id }
+      data: service
     });
   } catch (error) {
-    console.error('Error adding service:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while adding service'
-    });
+    console.error('Add service error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Update a service
 export async function updateService(req: Request, res: Response) {
   try {
-    const userId = req.user?.id;
-    const serviceId = parseInt(req.params.id, 10);
+    const { id } = req.params;
+    const { title, description, charges, category_id } = req.body;
     
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    if (!serviceId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Service ID is required'
-      });
-    }
-    
-    // Check if service exists and belongs to the user
-    const [existingService] = await db.select()
-      .from(services)
-      .where(
-        and(
-          eq(services.id, serviceId),
-          eq(services.userId, userId.toString())
-        )
-      )
-      .limit(1);
+    // Check if service exists and belongs to user
+    const existingService = await prisma.services.findFirst({
+      where: {
+        id: Number(id),
+        user_id: req.user.phoneNumber
+      }
+    });
     
     if (!existingService) {
       return res.status(404).json({
         success: false,
-        message: 'Service not found or you do not have permission to edit it'
+        message: 'Service not found or you do not have permission'
       });
     }
     
-    const { title, description, category_id, charges } = req.body;
-    const updateData: Partial<InsertService> = {};
-    
-    if (title) updateData.title = title;
-    if (description) updateData.description = description;
-    if (category_id) updateData.categoryId = parseInt(category_id, 10);
-    if (charges) updateData.charges = parseInt(charges, 10);
-    
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No valid fields to update'
-      });
-    }
-    
-    // Update the service
-    await db.update(services)
-      .set(updateData)
-      .where(eq(services.id, serviceId));
-    
-    // Handle service sub-categories if provided
-    if (req.body.subCategories && Array.isArray(req.body.subCategories)) {
-      // Delete existing sub-categories
-      await db.delete(serviceSubCategories)
-        .where(eq(serviceSubCategories.serviceId, serviceId));
-      
-      // Add new sub-categories
-      const subCatInserts: InsertServiceSubCategory[] = req.body.subCategories.map(
-        (subCatId: number) => ({
-          serviceId,
-          subCategoryId: subCatId,
-          createdAt: new Date()
-        })
-      );
-      
-      if (subCatInserts.length > 0) {
-        await db.insert(serviceSubCategories).values(subCatInserts);
+    // Update service
+    const updatedService = await prisma.services.update({
+      where: { id: Number(id) },
+      data: {
+        title,
+        description,
+        charges: Number(charges),
+        category_id: Number(category_id)
       }
-    }
+    });
     
-    // Handle service images if provided
-    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-      // Add new images
-      const imageInserts: InsertServiceImage[] = req.files.map(
-        (file: Express.Multer.File) => ({
-          serviceId,
-          imageName: file.filename,
-          createdAt: new Date()
-        })
-      );
-      
-      if (imageInserts.length > 0) {
-        await db.insert(serviceImages).values(imageInserts);
-      }
-    }
-    
-    return res.status(200).json({
+    res.json({
       success: true,
-      message: 'Service updated successfully'
+      message: 'Service updated successfully',
+      data: updatedService
     });
   } catch (error) {
-    console.error('Error updating service:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while updating service'
-    });
+    console.error('Update service error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Delete a service
 export async function deleteService(req: Request, res: Response) {
   try {
-    const userId = req.user?.id;
-    const serviceId = parseInt(req.params.id, 10);
+    const { id } = req.params;
     
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    if (!serviceId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Service ID is required'
-      });
-    }
-    
-    // Check if service exists and belongs to the user
-    const [existingService] = await db.select()
-      .from(services)
-      .where(
-        and(
-          eq(services.id, serviceId),
-          eq(services.userId, userId.toString())
-        )
-      )
-      .limit(1);
+    // Check if service exists and belongs to user
+    const existingService = await prisma.services.findFirst({
+      where: {
+        id: Number(id),
+        user_id: req.user.phoneNumber
+      }
+    });
     
     if (!existingService) {
       return res.status(404).json({
         success: false,
-        message: 'Service not found or you do not have permission to delete it'
+        message: 'Service not found or you do not have permission'
       });
     }
     
-    // Delete service images
-    await db.delete(serviceImages)
-      .where(eq(serviceImages.serviceId, serviceId));
-    
-    // Delete service sub-categories
-    await db.delete(serviceSubCategories)
-      .where(eq(serviceSubCategories.serviceId, serviceId));
-    
-    // Delete service boostings
-    await db.delete(serviceBoosted)
-      .where(eq(serviceBoosted.serviceId, serviceId));
-    
     // Delete service
-    await db.delete(services)
-      .where(eq(services.id, serviceId));
+    await prisma.services.delete({
+      where: { id: Number(id) }
+    });
     
-    return res.status(200).json({
+    res.json({
       success: true,
       message: 'Service deleted successfully'
     });
   } catch (error) {
-    console.error('Error deleting service:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while deleting service'
-    });
+    console.error('Delete service error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get all services
 export async function getServices(req: Request, res: Response) {
   try {
-    const page = parseInt(req.query.page as string || '1', 10);
-    const limit = parseInt(req.query.limit as string || '10', 10);
-    const offset = (page - 1) * limit;
-    const categoryId = req.query.category_id ? parseInt(req.query.category_id as string, 10) : null;
-    const userId = req.query.user_id ? parseInt(req.query.user_id as string, 10) : null;
+    // Get all services
+    const services = await prisma.services.findMany();
     
-    // Build query conditions
-    let whereClause = sql`1 = 1`; // Always true condition
-    
-    if (categoryId) {
-      whereClause = and(whereClause, eq(services.categoryId, categoryId));
-    }
-    
-    if (userId) {
-      whereClause = and(whereClause, eq(services.userId, userId.toString()));
-    }
-    
-    // Get services
-    const servicesList = await db.select({
-      id: services.id,
-      title: services.title,
-      description: services.description,
-      charges: services.charges,
-      categoryId: services.categoryId,
-      userId: services.userId,
-      createdAt: services.createdAt
-    })
-    .from(services)
-    .where(whereClause)
-    .limit(limit)
-    .offset(offset)
-    .orderBy(desc(services.createdAt));
-    
-    // Get total count
-    const [{ count }] = await db.select({
-      count: sql<number>`count(*)`
-    })
-    .from(services)
-    .where(whereClause);
-    
-    // Get service images
-    const serviceIds = servicesList.map(service => service.id);
-    
-    let imagesMap: Record<number, { id: number; serviceId: number; imageName: string }[]> = {};
-    
-    if (serviceIds.length > 0) {
-      const serviceImagesData = await db.select({
-        id: serviceImages.id,
-        serviceId: serviceImages.serviceId,
-        imageName: serviceImages.imageName
-      })
-      .from(serviceImages)
-      .where(inArray(serviceImages.serviceId, serviceIds));
+    // Format services with images, subcategories, and other data
+    const formattedServices = await Promise.all(services.map(async (service) => {
+      // Get service images
+      const images = await prisma.service_images.findMany({
+        where: { service_id: service.id }
+      });
       
-      // Group images by service ID
-      imagesMap = serviceImagesData.reduce((acc, img) => {
-        if (!acc[img.serviceId]) {
-          acc[img.serviceId] = [];
-        }
-        acc[img.serviceId].push(img);
-        return acc;
-      }, {} as Record<number, { id: number; serviceId: number; imageName: string }[]>);
-    }
-    
-    // Add images to services
-    const servicesWithImages = servicesList.map(service => ({
-      ...service,
-      images: imagesMap[service.id] || []
+      // Get service provider
+      const provider = await prisma.users.findFirst({
+        where: { phone_number: service.user_id }
+      });
+      
+      // Get category
+      const category = await prisma.category.findUnique({
+        where: { id: service.category_id }
+      });
+      
+      // Get subcategories
+      const subCategoryRelations = await prisma.service_subCategories.findMany({
+        where: { service_id: service.id }
+      });
+      
+      const subCategoryIds = subCategoryRelations.map(rel => rel.sub_category_id);
+      
+      const subCategories = await prisma.sub_category.findMany({
+        where: { id: { in: subCategoryIds } }
+      });
+      
+      // Return formatted service
+      return {
+        ...service,
+        images: images.map(img => img.image_name),
+        provider: provider ? {
+          id: provider.id,
+          fullName: provider.full_name,
+          phoneNumber: provider.phone_number,
+          profileImage: provider.profile_image
+        } : null,
+        category: category?.name || '',
+        subCategories: subCategories.map(sc => sc.name)
+      };
     }));
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: servicesWithImages,
-      pagination: {
-        totalItems: count,
-        totalPages: Math.ceil(count / limit),
-        currentPage: page,
-        itemsPerPage: limit
-      }
+      data: formattedServices
     });
   } catch (error) {
-    console.error('Error fetching services:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching services'
-    });
+    console.error('Get services error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get a service by ID
 export async function getServiceById(req: Request, res: Response) {
   try {
-    const serviceId = parseInt(req.params.id, 10);
+    const { id } = req.params;
     
-    if (!serviceId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Service ID is required'
-      });
-    }
-    
-    // Get service details
-    const [service] = await db.select({
-      id: services.id,
-      title: services.title,
-      description: services.description,
-      charges: services.charges,
-      categoryId: services.categoryId,
-      userId: services.userId,
-      createdAt: services.createdAt
-    })
-    .from(services)
-    .where(eq(services.id, serviceId))
-    .limit(1);
+    // Get service
+    const service = await prisma.services.findUnique({
+      where: { id: Number(id) }
+    });
     
     if (!service) {
       return res.status(404).json({
@@ -385,250 +220,229 @@ export async function getServiceById(req: Request, res: Response) {
     }
     
     // Get service images
-    const serviceImagesData = await db.select({
-      id: serviceImages.id,
-      serviceId: serviceImages.serviceId,
-      imageName: serviceImages.imageName
-    })
-    .from(serviceImages)
-    .where(eq(serviceImages.serviceId, serviceId));
+    const images = await prisma.service_images.findMany({
+      where: { service_id: service.id }
+    });
     
-    // Get service provider info
-    const [provider] = await db.select({
-      id: users.id,
-      fullName: users.fullName,
-      profileImage: users.profileImage,
-      userTypeId: users.userTypeId
-    })
-    .from(users)
-    .where(eq(users.id, parseInt(service.userId, 10)))
-    .limit(1);
+    // Get service provider
+    const provider = await prisma.users.findFirst({
+      where: { phone_number: service.user_id }
+    });
     
-    // Get category info
-    const [category] = await db.select({
-      id: categories.id,
-      name: categories.name
-    })
-    .from(categories)
-    .where(eq(categories.id, service.categoryId))
-    .limit(1);
+    // Get category
+    const category = await prisma.category.findUnique({
+      where: { id: service.category_id }
+    });
     
     // Get subcategories
-    const subCategoriesData = await db.select({
-      id: subCategories.id,
-      name: subCategories.name
-    })
-    .from(subCategories)
-    .innerJoin(
-      serviceSubCategories,
-      eq(serviceSubCategories.subCategoryId, subCategories.id)
-    )
-    .where(eq(serviceSubCategories.serviceId, serviceId));
+    const subCategoryRelations = await prisma.service_subCategories.findMany({
+      where: { service_id: service.id }
+    });
     
-    // Combine all data
-    const serviceWithDetails = {
+    const subCategoryIds = subCategoryRelations.map(rel => rel.sub_category_id);
+    
+    const subCategories = await prisma.sub_category.findMany({
+      where: { id: { in: subCategoryIds } }
+    });
+    
+    // Return formatted service
+    const formattedService = {
       ...service,
-      images: serviceImagesData,
-      provider,
-      category,
-      subCategories: subCategoriesData
+      images: images.map(img => img.image_name),
+      provider: provider ? {
+        id: provider.id,
+        fullName: provider.full_name,
+        phoneNumber: provider.phone_number,
+        profileImage: provider.profile_image
+      } : null,
+      category: category?.name || '',
+      subCategories: subCategories.map(sc => sc.name)
     };
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: serviceWithDetails
+      data: formattedService
     });
   } catch (error) {
-    console.error('Error fetching service details:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching service details'
-    });
+    console.error('Get service by ID error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Search for services
 export async function searchUstadgee(req: Request, res: Response) {
   try {
-    const { search_string, user_id, lat, long, service_id } = req.body;
+    const { query, latitude, longitude, category_id, distance, price_min, price_max } = req.body;
     
-    let whereClause = sql`u.user_type = 2 OR u.user_type = 3`; // Ustadgee or Karigar
+    // Base query
+    let whereClause: any = {};
     
-    if (search_string) {
-      whereClause = and(
-        whereClause,
-        like(users.fullName, `%${search_string}%`)
-      );
+    // Search by title or description
+    if (query) {
+      whereClause.OR = [
+        { title: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } }
+      ];
     }
     
-    if (service_id) {
-      whereClause = and(
-        whereClause,
-        eq(services.id, parseInt(service_id, 10))
-      );
+    // Filter by category
+    if (category_id) {
+      whereClause.category_id = Number(category_id);
     }
     
-    // Get service providers
-    const providers = await db.select({
-      id: users.id,
-      fullName: users.fullName,
-      phoneNumber: users.phoneNumber,
-      profileImage: users.profileImage,
-      userTypeId: users.userTypeId,
-      latitude: users.latitude,
-      longitude: users.longitude,
-      servicesCount: sql<number>`(SELECT COUNT(*) FROM services s WHERE s.user_id = ${users.id.toString()})`
-    })
-    .from(users)
-    .where(whereClause)
-    .limit(50);
+    // Filter by price range
+    if (price_min !== undefined) {
+      whereClause.charges = { ...whereClause.charges, gte: Number(price_min) };
+    }
     
-    // Calculate distance if coordinates provided
-    if (lat && long) {
-      const userLat = parseFloat(lat);
-      const userLong = parseFloat(long);
-      
-      const providersWithDistance = providers.map(provider => {
-        const providerLat = parseFloat(provider.latitude);
-        const providerLong = parseFloat(provider.longitude);
-        
-        let distance = null;
-        if (!isNaN(providerLat) && !isNaN(providerLong)) {
-          distance = calculateDistance(userLat, userLong, providerLat, providerLong);
-        }
-        
-        return {
-          ...provider,
-          distance
-        };
+    if (price_max !== undefined) {
+      whereClause.charges = { ...whereClause.charges, lte: Number(price_max) };
+    }
+    
+    // Get services
+    const services = await prisma.services.findMany({
+      where: whereClause
+    });
+    
+    // Format and filter by distance if needed
+    let formattedServices = await Promise.all(services.map(async (service) => {
+      // Get service images
+      const images = await prisma.service_images.findMany({
+        where: { service_id: service.id }
       });
       
-      // Sort by distance
-      providersWithDistance.sort((a, b) => {
+      // Get service provider
+      const provider = await prisma.users.findFirst({
+        where: { phone_number: service.user_id }
+      });
+      
+      // Get category
+      const category = await prisma.category.findUnique({
+        where: { id: service.category_id }
+      });
+      
+      // Calculate distance if coordinates are provided
+      let serviceDistance = null;
+      if (latitude && longitude && provider) {
+        const providerLat = parseFloat(provider.latitude);
+        const providerLon = parseFloat(provider.longitude);
+        
+        if (!isNaN(providerLat) && !isNaN(providerLon)) {
+          serviceDistance = calculateDistance(
+            parseFloat(latitude),
+            parseFloat(longitude),
+            providerLat,
+            providerLon
+          );
+        }
+      }
+      
+      // Return formatted service with distance
+      return {
+        ...service,
+        images: images.map(img => img.image_name),
+        provider: provider ? {
+          id: provider.id,
+          fullName: provider.full_name,
+          phoneNumber: provider.phone_number,
+          profileImage: provider.profile_image
+        } : null,
+        category: category?.name || '',
+        distance: serviceDistance
+      };
+    }));
+    
+    // Filter by distance if specified
+    if (distance && latitude && longitude) {
+      formattedServices = formattedServices.filter(
+        service => service.distance !== null && service.distance <= parseFloat(distance)
+      );
+    }
+    
+    // Sort by distance if available
+    if (latitude && longitude) {
+      formattedServices.sort((a, b) => {
         if (a.distance === null) return 1;
         if (b.distance === null) return -1;
         return a.distance - b.distance;
       });
-      
-      return res.status(200).json({
-        success: true,
-        data: providersWithDistance
-      });
     }
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: providers
+      data: formattedServices
     });
   } catch (error) {
-    console.error('Error searching Ustadgee:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while searching Ustadgee'
-    });
+    console.error('Search error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Boost a service
 export async function boostService(req: Request, res: Response) {
   try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-    
     const { service_id, day_selected, payment_method, amount } = req.body;
     
-    if (!service_id || !day_selected || !payment_method || !amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Service ID, days, payment method, and amount are required'
-      });
-    }
+    // Create service boost record
+    const boostedService = await prisma.service_boosted.create({
+      data: {
+        service_id: Number(service_id),
+        day_selected: Number(day_selected),
+        payment_method,
+        amount: Number(amount)
+      }
+    });
     
-    // Check if service exists and belongs to the user
-    const [existingService] = await db.select()
-      .from(services)
-      .where(
-        and(
-          eq(services.id, parseInt(service_id, 10)),
-          eq(services.userId, userId.toString())
-        )
-      )
-      .limit(1);
+    // Create payment method record
+    await prisma.payment_methods.create({
+      data: {
+        service_boosted_id: boostedService.id,
+        payment_method,
+        amount: amount.toString()
+      }
+    });
     
-    if (!existingService) {
-      return res.status(404).json({
-        success: false,
-        message: 'Service not found or you do not have permission to boost it'
-      });
-    }
-    
-    // Create service boost
-    const [newBoost] = await db.insert(serviceBoosted).values({
-      serviceId: parseInt(service_id, 10),
-      daySelected: parseInt(day_selected, 10),
-      paymentMethod: payment_method,
-      amount: parseInt(amount, 10),
-      status: 1,
-      createdAt: new Date()
-    }).returning({ id: serviceBoosted.id });
-    
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       message: 'Service boosted successfully',
-      data: { id: newBoost.id }
+      data: boostedService
     });
   } catch (error) {
-    console.error('Error boosting service:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while boosting service'
-    });
+    console.error('Boost service error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get categories
 export async function getCategories(req: Request, res: Response) {
   try {
-    const categoriesList = await db.select().from(categories);
+    const categories = await prisma.category.findMany();
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: categoriesList
+      data: categories
     });
   } catch (error) {
-    console.error('Error fetching categories:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching categories'
-    });
+    console.error('Get categories error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get subcategories
 export async function getSubCategories(req: Request, res: Response) {
   try {
-    const categoryId = req.query.category_id ? 
-      parseInt(req.query.category_id as string, 10) : null;
+    const { category_id } = req.params;
     
-    let query = db.select().from(subCategories);
+    const subCategories = await prisma.sub_category.findMany({
+      where: { category_id: Number(category_id) }
+    });
     
-    if (categoryId) {
-      query = query.where(eq(subCategories.categoryId, categoryId));
-    }
-    
-    const subCategoriesList = await query;
-    
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: subCategoriesList
+      data: subCategories
     });
   } catch (error) {
-    console.error('Error fetching subcategories:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching subcategories'
-    });
+    console.error('Get subcategories error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }

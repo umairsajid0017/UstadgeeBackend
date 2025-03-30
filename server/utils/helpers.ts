@@ -1,23 +1,6 @@
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { fileURLToPath } from 'url';
-
-// Get current file path and directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const UPLOAD_DIR = path.join(__dirname, '../../uploads');
-const PROFILE_IMG_DIR = path.join(UPLOAD_DIR, 'profiles');
-const SERVICE_IMG_DIR = path.join(UPLOAD_DIR, 'services');
-const AUDIO_DIR = path.join(UPLOAD_DIR, 'audio');
-
-// Ensure upload directories exist
-[UPLOAD_DIR, PROFILE_IMG_DIR, SERVICE_IMG_DIR, AUDIO_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+import crypto from 'crypto';
 
 /**
  * Save a Base64 encoded image to the profile images directory
@@ -27,27 +10,27 @@ const AUDIO_DIR = path.join(UPLOAD_DIR, 'audio');
  */
 export async function saveProfileImage(imageData: string, imageName: string): Promise<string> {
   try {
-    // Extract MIME type and base64 data
-    const matches = imageData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    // Extract the actual base64 data by removing the data URL prefix
+    const base64Data = imageData.replace(/^data:image\/\w+;base64,/, '');
     
-    if (!matches || matches.length !== 3) {
-      throw new Error('Invalid base64 image data');
-    }
-    
-    const type = matches[1];
-    const data = Buffer.from(matches[2], 'base64');
+    // Get file extension from the original name or default to .jpg
+    const ext = path.extname(imageName) || '.jpg';
     
     // Generate a unique filename
-    const fileName = `profile-${Date.now()}-${uuidv4()}${path.extname(imageName)}`;
-    const filePath = path.join(PROFILE_IMG_DIR, fileName);
+    const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
     
-    // Save the image
-    await fs.promises.writeFile(filePath, data);
+    // Make sure uploads/profiles directory exists
+    const uploadDir = path.join(process.cwd(), 'uploads', 'profiles');
+    await fs.mkdir(uploadDir, { recursive: true });
     
-    return fileName;
+    // Save the file
+    const filePath = path.join(uploadDir, filename);
+    await fs.writeFile(filePath, base64Data, 'base64');
+    
+    return filename;
   } catch (error) {
     console.error('Error saving profile image:', error);
-    throw error;
+    throw new Error('Failed to save profile image');
   }
 }
 
@@ -59,27 +42,27 @@ export async function saveProfileImage(imageData: string, imageName: string): Pr
  */
 export async function saveAudioFile(audioData: string, audioName: string): Promise<string> {
   try {
-    // Extract MIME type and base64 data
-    const matches = audioData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    // Extract the actual base64 data by removing the data URL prefix
+    const base64Data = audioData.replace(/^data:audio\/\w+;base64,/, '');
     
-    if (!matches || matches.length !== 3) {
-      throw new Error('Invalid base64 audio data');
-    }
-    
-    const type = matches[1];
-    const data = Buffer.from(matches[2], 'base64');
+    // Get file extension from the original name or default to .mp3
+    const ext = path.extname(audioName) || '.mp3';
     
     // Generate a unique filename
-    const fileName = `audio-${Date.now()}-${uuidv4()}${path.extname(audioName)}`;
-    const filePath = path.join(AUDIO_DIR, fileName);
+    const filename = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}${ext}`;
     
-    // Save the audio file
-    await fs.promises.writeFile(filePath, data);
+    // Make sure uploads/audio directory exists
+    const uploadDir = path.join(process.cwd(), 'uploads', 'audio');
+    await fs.mkdir(uploadDir, { recursive: true });
     
-    return fileName;
+    // Save the file
+    const filePath = path.join(uploadDir, filename);
+    await fs.writeFile(filePath, base64Data, 'base64');
+    
+    return filename;
   } catch (error) {
     console.error('Error saving audio file:', error);
-    throw error;
+    throw new Error('Failed to save audio file');
   }
 }
 
@@ -92,15 +75,20 @@ export async function saveAudioFile(audioData: string, audioName: string): Promi
  * @returns Distance in kilometers
  */
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the earth in km
+  // Earth's radius in kilometers
+  const R = 6371;
+  
   const dLat = deg2rad(lat2 - lat1);
   const dLon = deg2rad(lon2 - lon1);
+  
   const a = 
     Math.sin(dLat/2) * Math.sin(dLat/2) +
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
     Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   const distance = R * c; // Distance in km
+  
   return distance;
 }
 
@@ -119,15 +107,16 @@ function deg2rad(deg: number): number {
  * @returns Formatted phone number
  */
 export function formatPhoneNumber(phoneNumber: string): string {
-  // Remove any non-digit characters
-  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  // Remove any non-numeric characters
+  const cleaned = phoneNumber.replace(/\D/g, '');
   
-  // Add '+' if not present
-  if (!phoneNumber.startsWith('+')) {
-    return `+${digitsOnly}`;
+  // If the number doesn't have a country code, add +92 (Pakistan) as default
+  if (cleaned.length <= 10) {
+    return `+92${cleaned.slice(-10)}`;
   }
   
-  return phoneNumber;
+  // If it already has a country code, add + at the beginning if missing
+  return cleaned.startsWith('+') ? cleaned : `+${cleaned}`;
 }
 
 /**
@@ -139,17 +128,13 @@ export function formatPhoneNumber(phoneNumber: string): string {
  */
 export function getPaginationMetadata(page: number, limit: number, total: number) {
   const totalPages = Math.ceil(total / limit);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
   
   return {
     currentPage: page,
     totalPages,
     totalItems: total,
     itemsPerPage: limit,
-    hasNextPage,
-    hasPrevPage,
-    nextPage: hasNextPage ? page + 1 : null,
-    prevPage: hasPrevPage ? page - 1 : null
+    hasNextPage: page < totalPages,
+    hasPrevPage: page > 1
   };
 }

@@ -1,241 +1,189 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { db } from './db';
-import { users, User, InsertUser, registerUserSchema, loginUserSchema } from '../shared/schema';
-import { eq } from 'drizzle-orm';
-import { validationError } from './middleware/validation';
-import { saveProfileImage } from './utils/helpers';
+import jwt from 'jsonwebtoken';
+import prisma from './db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ustadgee-secret-key';
-const SALT_ROUNDS = 10;
+// Secret key for JWT
+const JWT_SECRET = process.env.JWT_SECRET || 'ustadgee_app_secret_key_for_security';
 
+// Hash a password
 export async function hashPassword(password: string): Promise<string> {
-  const salt = await bcrypt.genSalt(SALT_ROUNDS);
-  return bcrypt.hash(password, salt);
+  const salt = await bcrypt.genSalt(10);
+  return await bcrypt.hash(password, salt);
 }
 
+// Compare password with hash
 export async function comparePasswords(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword);
+  return await bcrypt.compare(password, hashedPassword);
 }
 
-export function generateToken(user: User): string {
-  const payload = {
-    id: user.id,
-    phoneNumber: user.phoneNumber,
-    userTypeId: user.userTypeId
-  };
-  
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+// Generate JWT token
+export function generateToken(user: any): string {
+  return jwt.sign(
+    { id: user.id, phoneNumber: user.phone_number, userTypeId: user.user_type },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
 }
 
+// Register new user
 export async function register(req: Request, res: Response) {
   try {
-    // Validate request body
-    const validation = await registerUserSchema.safeParseAsync(req.body);
-    
-    if (!validation.success) {
-      return validationError(res, validation.error);
-    }
-    
-    const { phoneNumber, fullName, password, userTypeId, imageData, imageName } = validation.data;
+    const { phoneNumber, fullName, password, userTypeId, imageData, image_name } = req.body;
 
     // Check if user already exists
-    const existingUser = await db.select().from(users).where(eq(users.phoneNumber, phoneNumber)).limit(1);
-    
-    if (existingUser.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number already registered'
-      });
+    const existingUser = await prisma.users.findUnique({
+      where: { phone_number: phoneNumber }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'User already exists' });
     }
 
     // Hash password
     const hashedPassword = await hashPassword(password);
-    
-    // Process profile image if available
-    let profileImage = '';
-    if (imageData && imageName) {
-      profileImage = await saveProfileImage(imageData, imageName);
-    }
-    
-    // Create new user
-    const newUser: InsertUser = {
-      phoneNumber,
-      fullName,
-      password: hashedPassword,
-      profileImage: profileImage || 'default-profile.png',
-      auth: '',
-      active: 1,
-      userTypeId,
-      latitude: req.body.latitude || '0',
-      longitude: req.body.longitude || '0',
-      cnicFrontImg: req.body.cnicFrontImg || '',
-      cnicBackImg: req.body.cnicBackImg || '',
-      cnicNum: req.body.cnicNum || '',
-      createdAt: new Date()
-    };
-    
-    // Insert user
-    const [insertedUser] = await db.insert(users).values(newUser).returning({
-      id: users.id,
-      phoneNumber: users.phoneNumber,
-      fullName: users.fullName,
-      userTypeId: users.userTypeId
+
+    // Create the user in database
+    const newUser = await prisma.users.create({
+      data: {
+        phone_number: phoneNumber,
+        full_name: fullName,
+        password: hashedPassword,
+        user_type: userTypeId,
+        profile_image: image_name || 'default.png',
+        auth: 'local',
+        active: 1,
+        latitude: '0',
+        longitude: '0',
+        cnic_front_img: '',
+        cnic_back_img: '',
+        cnic_num: ''
+      }
     });
-    
+
     // Generate JWT token
-    const token = generateToken(insertedUser as User);
-    
-    // Update user token
-    await db.update(users)
-      .set({ token })
-      .where(eq(users.id, insertedUser.id));
-    
-    // Return success response
+    const token = generateToken(newUser);
+
+    // Update user with token
+    await prisma.users.update({
+      where: { id: newUser.id },
+      data: { token }
+    });
+
+    // Response with user and token
     return res.status(201).json({
       success: true,
-      message: 'User registered successfully',
-      data: {
-        user_id: insertedUser.id,
-        phone_number: insertedUser.phoneNumber,
-        full_name: insertedUser.fullName,
-        token
+      user: {
+        id: newUser.id,
+        phoneNumber: newUser.phone_number,
+        fullName: newUser.full_name,
+        userTypeId: newUser.user_type,
+        profileImage: newUser.profile_image
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error during registration'
-    });
+    console.error('Register error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Login user
 export async function login(req: Request, res: Response) {
   try {
-    // Get phone and password from request body
     const { phoneNumber, password } = req.body;
-    
-    // Find user by phone number
-    const [existingUser] = await db.select().from(users).where(eq(users.phoneNumber, phoneNumber));
-    
-    if (!existingUser) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid phone number or password'
-      });
+
+    // Check user exists
+    const user = await prisma.users.findUnique({
+      where: { phone_number: phoneNumber }
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
-    
-    // Verify password
-    const isPasswordValid = await comparePasswords(password, existingUser.password);
-    
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid phone number or password'
-      });
+
+    // Check password
+    const isMatch = await comparePasswords(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Invalid credentials' });
     }
-    
+
     // Generate JWT token
-    const token = generateToken(existingUser);
-    
-    // Update user token
-    await db.update(users)
-      .set({ token })
-      .where(eq(users.id, existingUser.id));
-    
-    // Return success response
-    return res.status(200).json({
+    const token = generateToken(user);
+
+    // Update user with new token
+    await prisma.users.update({
+      where: { id: user.id },
+      data: { token }
+    });
+
+    // Response with user and token
+    res.status(200).json({
       success: true,
-      message: 'Login successful',
-      data: {
-        token,
-        user: {
-          id: existingUser.id,
-          phone_number: existingUser.phoneNumber,
-          full_name: existingUser.fullName,
-          user_type: existingUser.userTypeId
-        }
-      }
+      user: {
+        id: user.id,
+        phoneNumber: user.phone_number,
+        fullName: user.full_name,
+        userTypeId: user.user_type,
+        profileImage: user.profile_image
+      },
+      token
     });
   } catch (error) {
     console.error('Login error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error during login'
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Check if user exists
 export async function checkUserExists(req: Request, res: Response) {
   try {
-    const phone = req.body.phone;
+    const { phoneNumber } = req.body;
     
-    if (!phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Phone number is required'
-      });
-    }
-    
-    // Find user by phone number
-    const existingUser = await db.select().from(users).where(eq(users.phoneNumber, phone)).limit(1);
-    
-    return res.status(200).json({
-      success: true,
-      exists: existingUser.length > 0
+    const user = await prisma.users.findUnique({
+      where: { phone_number: phoneNumber }
     });
+    
+    if (user) {
+      return res.json({ success: true, exists: true });
+    } else {
+      return res.json({ success: true, exists: false });
+    }
   } catch (error) {
     console.error('Check user error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get authenticated user
 export async function getUser(req: Request, res: Response) {
   try {
+    // @ts-ignore - user is added by auth middleware
     const userId = req.user?.id;
     
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
     }
     
-    // Find user by ID
-    const [user] = await db.select({
-      id: users.id,
-      phoneNumber: users.phoneNumber,
-      fullName: users.fullName,
-      profileImage: users.profileImage,
-      userTypeId: users.userTypeId,
-      latitude: users.latitude,
-      longitude: users.longitude
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+    const user = await prisma.users.findUnique({
+      where: { id: userId }
+    });
     
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      user
+      user: {
+        id: user.id,
+        phoneNumber: user.phone_number,
+        fullName: user.full_name,
+        userTypeId: user.user_type,
+        profileImage: user.profile_image
+      }
     });
   } catch (error) {
     console.error('Get user error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }

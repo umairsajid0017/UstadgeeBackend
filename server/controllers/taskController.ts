@@ -1,470 +1,317 @@
 import { Request, Response } from 'express';
-import { db } from '../db';
-import {
-  taskAssigns,
-  services,
-  users,
-  statuses,
-  InsertTaskAssign
-} from '../../shared/schema';
-import { eq, and, desc, asc, or, inArray } from 'drizzle-orm';
-import { saveAudioFile } from '../utils/helpers';
+import prisma from '../db';
 
+// Add a new task
 export async function addTask(req: Request, res: Response) {
   try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-    
     const {
-      service_id,
-      user_id,
       worker_id,
+      service_id,
       description,
       est_time,
-      amount,
+      total_amount,
       offer_expiration_date,
+      audio_name,
       cnic,
-      arrival_time,
-      audio_data,
-      audio_name
+      arrival_time
     } = req.body;
     
-    if (!service_id || !worker_id || !description || !est_time || !amount) {
-      return res.status(400).json({
-        success: false,
-        message: 'Required fields are missing'
-      });
-    }
-    
-    // Check if service exists
-    const [existingService] = await db.select()
-      .from(services)
-      .where(eq(services.id, parseInt(service_id, 10)))
-      .limit(1);
-    
-    if (!existingService) {
-      return res.status(404).json({
-        success: false,
-        message: 'Service not found'
-      });
-    }
-    
-    // Process audio if provided
-    let audioFileName = '';
-    if (audio_data && audio_name) {
-      audioFileName = await saveAudioFile(audio_data, audio_name);
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
     // Create new task
-    const newTask: InsertTaskAssign = {
-      workerId: worker_id,
-      userId: user_id || userId.toString(),
-      serviceId: parseInt(service_id, 10),
-      description,
-      estTime: parseInt(est_time, 10),
-      totalAmount: parseInt(amount, 10),
-      offerExpirationDate: new Date(offer_expiration_date),
-      statusId: 1, // Default status: Pending
-      audioName: audioFileName || audio_name || '',
-      cnic: cnic || '',
-      arrivalTime: new Date(arrival_time),
-      createdAt: new Date()
-    };
+    const newTask = await prisma.task_assigns.create({
+      data: {
+        worker_id,
+        user_id: req.user.phoneNumber,
+        service_id: Number(service_id),
+        description,
+        est_time: Number(est_time),
+        total_amount: Number(total_amount),
+        offer_expiration_date: new Date(offer_expiration_date),
+        status_id: 1, // Assuming 1 is "Pending" status
+        audio_name: audio_name || '',
+        cnic: cnic || '',
+        arrival_time: new Date(arrival_time)
+      }
+    });
     
-    const [insertedTask] = await db.insert(taskAssigns)
-      .values(newTask)
-      .returning({ id: taskAssigns.id });
+    // Get service details
+    const service = await prisma.services.findUnique({
+      where: { id: Number(service_id) }
+    });
     
-    return res.status(201).json({
+    // Create notification for service provider
+    await prisma.notification.create({
+      data: {
+        title: 'New Task Request',
+        type: 1,
+        username: worker_id,
+        username_notifier: req.user.phoneNumber,
+        post_id: newTask.id,
+        is_read: 0
+      }
+    });
+    
+    res.status(201).json({
       success: true,
       message: 'Task added successfully',
-      data: { id: insertedTask.id }
+      data: newTask
     });
   } catch (error) {
-    console.error('Error adding task:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while adding task'
-    });
+    console.error('Add task error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get tasks for a service provider
 export async function getUstadRequests(req: Request, res: Response) {
   try {
-    const workerId = req.body.worker_id || req.user?.id?.toString();
-    
-    if (!workerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Worker ID is required'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    // Get tasks for worker
-    const tasks = await db.select({
-      id: taskAssigns.id,
-      workerId: taskAssigns.workerId,
-      userId: taskAssigns.userId,
-      serviceId: taskAssigns.serviceId,
-      description: taskAssigns.description,
-      estTime: taskAssigns.estTime,
-      totalAmount: taskAssigns.totalAmount,
-      offerExpirationDate: taskAssigns.offerExpirationDate,
-      statusId: taskAssigns.statusId,
-      createdAt: taskAssigns.createdAt,
-      audioName: taskAssigns.audioName,
-      arrivalTime: taskAssigns.arrivalTime
-    })
-    .from(taskAssigns)
-    .where(
-      and(
-        eq(taskAssigns.workerId, workerId),
-        inArray(
-          taskAssigns.statusId,
-          [1, 2, 3] // Pending, Accepted, In Progress
-        )
-      )
-    )
-    .orderBy(desc(taskAssigns.createdAt));
+    // Get tasks assigned to this provider
+    const tasks = await prisma.task_assigns.findMany({
+      where: {
+        worker_id: req.user.phoneNumber
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
     
-    // Get user and service details for each task
-    const taskIds = tasks.map(task => task.id);
-    
-    if (taskIds.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: []
+    // Format tasks with additional info
+    const formattedTasks = await Promise.all(tasks.map(async (task) => {
+      // Get service
+      const service = await prisma.services.findUnique({
+        where: { id: task.service_id }
       });
-    }
-    
-    // Get status names
-    const statusMap = await db.select()
-      .from(statuses);
-    
-    const statusById = statusMap.reduce((acc, status) => {
-      acc[status.id] = status.name;
-      return acc;
-    }, {} as Record<number, string>);
-    
-    // Get user details
-    const userIds = [...new Set(tasks.map(task => task.userId))];
-    const usersMap = await db.select({
-      id: users.id,
-      fullName: users.fullName,
-      profileImage: users.profileImage,
-      phoneNumber: users.phoneNumber
-    })
-    .from(users)
-    .where(inArray(users.id, userIds.map(id => parseInt(id, 10))));
-    
-    const usersById = usersMap.reduce((acc, user) => {
-      acc[user.id] = user;
-      return acc;
-    }, {} as Record<number, typeof usersMap[number]>);
-    
-    // Get service details
-    const serviceIds = [...new Set(tasks.map(task => task.serviceId))];
-    const servicesMap = await db.select({
-      id: services.id,
-      title: services.title,
-      description: services.description
-    })
-    .from(services)
-    .where(inArray(services.id, serviceIds));
-    
-    const servicesById = servicesMap.reduce((acc, service) => {
-      acc[service.id] = service;
-      return acc;
-    }, {} as Record<number, typeof servicesMap[number]>);
-    
-    // Combine all data
-    const tasksWithDetails = tasks.map(task => ({
-      ...task,
-      user: usersById[parseInt(task.userId, 10)] || null,
-      service: servicesById[task.serviceId] || null,
-      status: statusById[task.statusId] || 'Unknown'
+      
+      // Get customer
+      const customer = await prisma.users.findFirst({
+        where: { phone_number: task.user_id }
+      });
+      
+      // Get status
+      const status = await prisma.status.findUnique({
+        where: { id: task.status_id }
+      });
+      
+      return {
+        ...task,
+        service: service ? {
+          id: service.id,
+          title: service.title,
+          description: service.description,
+          charges: service.charges
+        } : null,
+        customer: customer ? {
+          id: customer.id,
+          fullName: customer.full_name,
+          phoneNumber: customer.phone_number,
+          profileImage: customer.profile_image
+        } : null,
+        status: status?.name || 'Unknown'
+      };
     }));
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: tasksWithDetails
+      data: formattedTasks
     });
   } catch (error) {
-    console.error('Error fetching worker requests:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching requests'
-    });
+    console.error('Get Ustad requests error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get tasks requested by a user
 export async function getUserRequests(req: Request, res: Response) {
   try {
-    const userId = req.body.user_id || req.user?.id?.toString();
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    // Get active tasks for user
-    const tasks = await db.select({
-      id: taskAssigns.id,
-      workerId: taskAssigns.workerId,
-      userId: taskAssigns.userId,
-      serviceId: taskAssigns.serviceId,
-      description: taskAssigns.description,
-      estTime: taskAssigns.estTime,
-      totalAmount: taskAssigns.totalAmount,
-      offerExpirationDate: taskAssigns.offerExpirationDate,
-      statusId: taskAssigns.statusId,
-      createdAt: taskAssigns.createdAt,
-      audioName: taskAssigns.audioName,
-      arrivalTime: taskAssigns.arrivalTime
-    })
-    .from(taskAssigns)
-    .where(
-      and(
-        eq(taskAssigns.userId, userId),
-        inArray(
-          taskAssigns.statusId,
-          [1, 2, 3] // Pending, Accepted, In Progress
-        )
-      )
-    )
-    .orderBy(desc(taskAssigns.createdAt));
+    // Get tasks requested by this user
+    const tasks = await prisma.task_assigns.findMany({
+      where: {
+        user_id: req.user.phoneNumber
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
     
-    // Get worker and service details for each task
-    const taskIds = tasks.map(task => task.id);
-    
-    if (taskIds.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: []
+    // Format tasks with additional info
+    const formattedTasks = await Promise.all(tasks.map(async (task) => {
+      // Get service
+      const service = await prisma.services.findUnique({
+        where: { id: task.service_id }
       });
-    }
-    
-    // Get status names
-    const statusMap = await db.select()
-      .from(statuses);
-    
-    const statusById = statusMap.reduce((acc, status) => {
-      acc[status.id] = status.name;
-      return acc;
-    }, {} as Record<number, string>);
-    
-    // Get worker details
-    const workerIds = [...new Set(tasks.map(task => task.workerId))];
-    const workersMap = await db.select({
-      id: users.id,
-      fullName: users.fullName,
-      profileImage: users.profileImage,
-      phoneNumber: users.phoneNumber
-    })
-    .from(users)
-    .where(inArray(users.id, workerIds.map(id => parseInt(id, 10))));
-    
-    const workersById = workersMap.reduce((acc, worker) => {
-      acc[worker.id] = worker;
-      return acc;
-    }, {} as Record<number, typeof workersMap[number]>);
-    
-    // Get service details
-    const serviceIds = [...new Set(tasks.map(task => task.serviceId))];
-    const servicesMap = await db.select({
-      id: services.id,
-      title: services.title,
-      description: services.description
-    })
-    .from(services)
-    .where(inArray(services.id, serviceIds));
-    
-    const servicesById = servicesMap.reduce((acc, service) => {
-      acc[service.id] = service;
-      return acc;
-    }, {} as Record<number, typeof servicesMap[number]>);
-    
-    // Combine all data
-    const tasksWithDetails = tasks.map(task => ({
-      ...task,
-      worker: workersById[parseInt(task.workerId, 10)] || null,
-      service: servicesById[task.serviceId] || null,
-      status: statusById[task.statusId] || 'Unknown'
+      
+      // Get service provider
+      const provider = await prisma.users.findFirst({
+        where: { phone_number: task.worker_id }
+      });
+      
+      // Get status
+      const status = await prisma.status.findUnique({
+        where: { id: task.status_id }
+      });
+      
+      return {
+        ...task,
+        service: service ? {
+          id: service.id,
+          title: service.title,
+          description: service.description,
+          charges: service.charges
+        } : null,
+        provider: provider ? {
+          id: provider.id,
+          fullName: provider.full_name,
+          phoneNumber: provider.phone_number,
+          profileImage: provider.profile_image
+        } : null,
+        status: status?.name || 'Unknown'
+      };
     }));
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: tasksWithDetails
+      data: formattedTasks
     });
   } catch (error) {
-    console.error('Error fetching user requests:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching requests'
-    });
+    console.error('Get user requests error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Get completed tasks for a user
 export async function getUserRequestsCompleted(req: Request, res: Response) {
   try {
-    const userId = req.body.user_id || req.user?.id?.toString();
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    // Get completed tasks for user
-    const tasks = await db.select({
-      id: taskAssigns.id,
-      workerId: taskAssigns.workerId,
-      userId: taskAssigns.userId,
-      serviceId: taskAssigns.serviceId,
-      description: taskAssigns.description,
-      estTime: taskAssigns.estTime,
-      totalAmount: taskAssigns.totalAmount,
-      statusId: taskAssigns.statusId,
-      createdAt: taskAssigns.createdAt
-    })
-    .from(taskAssigns)
-    .where(
-      and(
-        eq(taskAssigns.userId, userId),
-        inArray(
-          taskAssigns.statusId,
-          [4, 5] // Completed, Cancelled
-        )
-      )
-    )
-    .orderBy(desc(taskAssigns.createdAt));
+    // Get completed tasks (assuming status_id 3 is "Completed")
+    const tasks = await prisma.task_assigns.findMany({
+      where: {
+        user_id: req.user.phoneNumber,
+        status_id: 3
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
     
-    // Get worker and service details for each task
-    const taskIds = tasks.map(task => task.id);
-    
-    if (taskIds.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: []
+    // Format tasks with additional info
+    const formattedTasks = await Promise.all(tasks.map(async (task) => {
+      // Get service
+      const service = await prisma.services.findUnique({
+        where: { id: task.service_id }
       });
-    }
-    
-    // Get status names
-    const statusMap = await db.select()
-      .from(statuses);
-    
-    const statusById = statusMap.reduce((acc, status) => {
-      acc[status.id] = status.name;
-      return acc;
-    }, {} as Record<number, string>);
-    
-    // Get worker details
-    const workerIds = [...new Set(tasks.map(task => task.workerId))];
-    const workersMap = await db.select({
-      id: users.id,
-      fullName: users.fullName,
-      profileImage: users.profileImage
-    })
-    .from(users)
-    .where(inArray(users.id, workerIds.map(id => parseInt(id, 10))));
-    
-    const workersById = workersMap.reduce((acc, worker) => {
-      acc[worker.id] = worker;
-      return acc;
-    }, {} as Record<number, typeof workersMap[number]>);
-    
-    // Get service details
-    const serviceIds = [...new Set(tasks.map(task => task.serviceId))];
-    const servicesMap = await db.select({
-      id: services.id,
-      title: services.title,
-      description: services.description
-    })
-    .from(services)
-    .where(inArray(services.id, serviceIds));
-    
-    const servicesById = servicesMap.reduce((acc, service) => {
-      acc[service.id] = service;
-      return acc;
-    }, {} as Record<number, typeof servicesMap[number]>);
-    
-    // Combine all data
-    const tasksWithDetails = tasks.map(task => ({
-      ...task,
-      worker: workersById[parseInt(task.workerId, 10)] || null,
-      service: servicesById[task.serviceId] || null,
-      status: statusById[task.statusId] || 'Unknown'
+      
+      // Get service provider
+      const provider = await prisma.users.findFirst({
+        where: { phone_number: task.worker_id }
+      });
+      
+      return {
+        ...task,
+        service: service ? {
+          id: service.id,
+          title: service.title,
+          description: service.description,
+          charges: service.charges
+        } : null,
+        provider: provider ? {
+          id: provider.id,
+          fullName: provider.full_name,
+          phoneNumber: provider.phone_number,
+          profileImage: provider.profile_image
+        } : null,
+        status: 'Completed'
+      };
     }));
     
-    return res.status(200).json({
+    res.json({
       success: true,
-      data: tasksWithDetails
+      data: formattedTasks
     });
   } catch (error) {
-    console.error('Error fetching completed requests:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while fetching completed requests'
-    });
+    console.error('Get completed requests error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }
 
+// Update task status
 export async function updateRequestStatus(req: Request, res: Response) {
   try {
-    const { request_id, status_id } = req.body;
+    const { id } = req.params;
+    const { status_id } = req.body;
     
-    if (!request_id || !status_id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Request ID and status ID are required'
-      });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
     }
     
-    // Validate status ID
-    const validStatuses = [1, 2, 3, 4, 5]; // Pending, Accepted, In Progress, Completed, Cancelled
-    if (!validStatuses.includes(parseInt(status_id, 10))) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status ID'
-      });
-    }
+    // Get the task
+    const task = await prisma.task_assigns.findUnique({
+      where: { id: Number(id) }
+    });
     
-    // Check if task exists
-    const [existingTask] = await db.select()
-      .from(taskAssigns)
-      .where(eq(taskAssigns.id, parseInt(request_id, 10)))
-      .limit(1);
-    
-    if (!existingTask) {
+    if (!task) {
       return res.status(404).json({
         success: false,
         message: 'Task not found'
       });
     }
     
-    // Update task status
-    await db.update(taskAssigns)
-      .set({ statusId: parseInt(status_id, 10) })
-      .where(eq(taskAssigns.id, parseInt(request_id, 10)));
+    // Check if user is allowed to update this task
+    if (task.worker_id !== req.user.phoneNumber && task.user_id !== req.user.phoneNumber) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this task'
+      });
+    }
     
-    return res.status(200).json({
+    // Update the task status
+    const updatedTask = await prisma.task_assigns.update({
+      where: { id: Number(id) },
+      data: { status_id: Number(status_id) }
+    });
+    
+    // Get status name
+    const status = await prisma.status.findUnique({
+      where: { id: Number(status_id) }
+    });
+    
+    // Create notification for the other party
+    const notifyUser = task.worker_id === req.user.phoneNumber ? task.user_id : task.worker_id;
+    
+    await prisma.notification.create({
+      data: {
+        title: `Task status updated to ${status ? status.name : 'new status'}`,
+        type: 2,
+        username: notifyUser,
+        username_notifier: req.user.phoneNumber,
+        post_id: task.id,
+        is_read: 0
+      }
+    });
+    
+    res.json({
       success: true,
-      message: 'Task status updated successfully'
+      message: 'Task status updated successfully',
+      data: {
+        ...updatedTask,
+        status: status?.name
+      }
     });
   } catch (error) {
-    console.error('Error updating task status:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Server error while updating task status'
-    });
+    console.error('Update task status error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 }

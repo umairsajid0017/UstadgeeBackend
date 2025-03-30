@@ -1,70 +1,115 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { db, initializeDatabase } from "./db";
-import { authenticate, isServiceProvider, isUser } from "./middleware/auth";
-import { processBase64Image, processBase64Audio, uploadProfileImage, uploadServiceImages, uploadAudio } from "./middleware/upload";
-import { validate } from "./middleware/validation";
-import { registerUserSchema, loginUserSchema } from "../shared/schema";
+import express from "express";
+import path from 'path';
+import multer from 'multer';
+import { promises as fsPromises } from 'fs';
 
-// Controllers
-import * as authController from "./auth";
-import * as userController from "./controllers/userController";
-import * as serviceController from "./controllers/serviceController";
-import * as taskController from "./controllers/taskController";
-import * as reviewController from "./controllers/reviewController";
-import * as chatController from "./controllers/chatController";
-import * as notificationController from "./controllers/notificationController";
+// Auth middleware
+import { authenticate, isServiceProvider, isUser, isAdmin } from "./middleware/auth";
+
+// Auth controller
+import { register, login, checkUserExists, getUser } from "./auth";
+
+// Service controller
+import { 
+  addService, 
+  updateService,
+  deleteService,
+  getServices,
+  getServiceById,
+  searchUstadgee,
+  boostService,
+  getCategories,
+  getSubCategories
+} from './controllers/serviceController';
+
+// Task controller
+import { 
+  addTask, 
+  getUstadRequests, 
+  getUserRequests, 
+  getUserRequestsCompleted, 
+  updateRequestStatus 
+} from './controllers/taskController';
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize database
-  await initializeDatabase();
+  // Configure multer for file uploads
+  const profileUploadDir = path.join(process.cwd(), 'uploads', 'profiles');
+  const serviceUploadDir = path.join(process.cwd(), 'uploads', 'services');
+  const audioUploadDir = path.join(process.cwd(), 'uploads', 'audio');
 
-  // Auth Routes
-  app.post("/api/register", processBase64Image, validate(registerUserSchema), authController.register);
-  app.post("/api/login", validate(loginUserSchema), authController.login);
-  app.post("/api/checkUserExists", authController.checkUserExists);
-  app.get("/api/user", authenticate, authController.getUser);
+  // Create upload directories
+  try {
+    await fsPromises.mkdir(profileUploadDir, { recursive: true });
+    await fsPromises.mkdir(serviceUploadDir, { recursive: true });
+    await fsPromises.mkdir(audioUploadDir, { recursive: true });
+  } catch (error) {
+    console.error('Error creating upload directories:', error);
+  }
 
-  // User Routes
-  app.post("/api/updateUserLocation", authenticate, userController.updateUserLocation);
-  app.get("/api/userProfile/:id?", authenticate, userController.getUserProfile);
-  app.put("/api/userProfile", authenticate, uploadProfileImage, userController.updateUserProfile);
-  app.get("/api/searchUsers", authenticate, userController.searchUsers);
+  // Configure multer storages
+  const profileStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, profileUploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  });
 
-  // Service Routes
-  app.get("/api/services", serviceController.getServices);
-  app.get("/api/service/:id", serviceController.getServiceById);
-  app.post("/api/addService", authenticate, isServiceProvider, uploadServiceImages, serviceController.addService);
-  app.put("/api/service/:id", authenticate, isServiceProvider, uploadServiceImages, serviceController.updateService);
-  app.delete("/api/service/:id", authenticate, isServiceProvider, serviceController.deleteService);
-  app.post("/api/searchUstadgee", serviceController.searchUstadgee);
-  app.post("/api/boostService", authenticate, isServiceProvider, serviceController.boostService);
-  app.get("/api/categories", serviceController.getCategories);
-  app.get("/api/subCategories", serviceController.getSubCategories);
+  const serviceStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, serviceUploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  });
 
-  // Task Routes
-  app.post("/api/addTask", authenticate, processBase64Audio, taskController.addTask);
-  app.post("/api/getUstadRequests", authenticate, taskController.getUstadRequests);
-  app.post("/api/getUserRequests", authenticate, taskController.getUserRequests);
-  app.post("/api/getUserRequestsCompleted", authenticate, taskController.getUserRequestsCompleted);
-  app.post("/api/updateRequestStatus", authenticate, taskController.updateRequestStatus);
+  const audioStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, audioUploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  });
 
-  // Review Routes
-  app.post("/api/addReview", authenticate, reviewController.addReview);
-  app.post("/api/showReviews", reviewController.showReviews);
-  app.get("/api/reviews/:worker_id", reviewController.showReviews);
+  // Create multer instances
+  const uploadProfileImage = multer({ storage: profileStorage });
+  const uploadServiceImage = multer({ storage: serviceStorage });
+  const uploadAudio = multer({ storage: audioStorage });
 
-  // Chat Routes
-  app.get("/api/chats", authenticate, chatController.getChatList);
-  app.post("/api/startChat", authenticate, chatController.startChat);
-  app.put("/api/updateChatMessage", authenticate, chatController.updateChatMessage);
-  app.delete("/api/chat/:id", authenticate, chatController.deleteChat);
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-  // Notification Routes
-  app.get("/api/notifications", authenticate, notificationController.getNotifications);
-  app.put("/api/notification/:id/read", authenticate, notificationController.markNotificationAsRead);
-  app.put("/api/notifications/read-all", authenticate, notificationController.markAllNotificationsAsRead);
-  app.post("/api/notification", authenticate, notificationController.createNotification);
+  // Authentication routes
+  app.post("/api/register", register);
+  app.post("/api/login", login);
+  app.post("/api/checkUserExists", checkUserExists);
+  app.get("/api/user", authenticate, getUser);
+
+  // Service routes
+  app.get("/api/services", getServices);
+  app.get("/api/service/:id", getServiceById);
+  app.post("/api/addService", authenticate, isServiceProvider, addService);
+  app.put("/api/service/:id", authenticate, isServiceProvider, updateService);
+  app.delete("/api/service/:id", authenticate, isServiceProvider, deleteService);
+  app.post("/api/searchUstadgee", searchUstadgee);
+  app.post("/api/boostService", authenticate, isServiceProvider, boostService);
+  app.get("/api/categories", getCategories);
+  app.get("/api/subCategories/:category_id", getSubCategories);
+
+  // Task routes
+  app.post("/api/addTask", authenticate, isUser, addTask);
+  app.post("/api/getUstadRequests", authenticate, isServiceProvider, getUstadRequests);
+  app.post("/api/getUserRequests", authenticate, isUser, getUserRequests);
+  app.post("/api/getUserRequestsCompleted", authenticate, isUser, getUserRequestsCompleted);
+  app.post("/api/updateRequestStatus", authenticate, updateRequestStatus);
 
   const httpServer = createServer(app);
   
