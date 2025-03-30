@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface AdminLayoutProps {
   children: ReactNode;
   title: string;
+  description?: string;
 }
 
-export default function AdminLayout({ children, title }: AdminLayoutProps) {
+export default function AdminLayout({ children, title, description }: AdminLayoutProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Listen for sidebar collapse state changes
@@ -24,7 +25,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
         "flex-1 transition-all duration-300",
         sidebarCollapsed ? "md:ml-20" : "md:ml-64"
       )}>
-        <Header title={title} />
+        <Header title={title} description={description} />
         <main className="p-6">
           {children}
         </main>

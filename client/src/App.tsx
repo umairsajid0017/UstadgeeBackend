@@ -9,8 +9,11 @@ import ServicesPage from "@/pages/services-page";
 import TasksPage from "@/pages/tasks-page";
 import DashboardPage from "@/pages/dashboard-page";
 import AdminDashboard from "@/pages/admin/dashboard";
+import ProfilePage from "@/pages/profile-page";
+import ChatPage from "@/pages/chat-page";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
+import { WebSocketProvider } from "./contexts/WebSocketContext";
 
 function Router() {
   return (
@@ -21,6 +24,8 @@ function Router() {
       <ProtectedRoute path="/admin" component={AdminDashboard} />
       <ProtectedRoute path="/services" component={ServicesPage} />
       <ProtectedRoute path="/tasks" component={TasksPage} />
+      <ProtectedRoute path="/profile" component={ProfilePage} />
+      <ProtectedRoute path="/chat" component={ChatPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -30,8 +35,10 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router />
-        <Toaster />
+        <WebSocketProvider>
+          <Router />
+          <Toaster />
+        </WebSocketProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

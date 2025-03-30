@@ -4,6 +4,7 @@ import express from "express";
 import path from 'path';
 import multer from 'multer';
 import { promises as fsPromises } from 'fs';
+import { WebSocketServer, WebSocket } from 'ws';
 
 // Auth middleware
 import { authenticate, isServiceProvider, isUser, isAdmin } from "./middleware/auth";
@@ -32,6 +33,30 @@ import {
   getUserRequestsCompleted, 
   updateRequestStatus 
 } from './controllers/taskController';
+
+// Chat controller
+import {
+  getChatList,
+  startChat,
+  updateChatMessage,
+  deleteChat
+} from './controllers/chatController';
+
+// Notification controller
+import {
+  getNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  createNotification
+} from './controllers/notificationController';
+
+// User controller
+import {
+  updateUserLocation,
+  getUserProfile,
+  updateUserProfile,
+  searchUsers
+} from './controllers/userController';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure multer for file uploads
@@ -110,8 +135,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/getUserRequests", authenticate, isUser, getUserRequests);
   app.post("/api/getUserRequestsCompleted", authenticate, isUser, getUserRequestsCompleted);
   app.post("/api/updateRequestStatus", authenticate, updateRequestStatus);
+  
+  // Chat routes
+  app.get("/api/chats", authenticate, getChatList);
+  app.post("/api/startChat", authenticate, startChat);
+  app.put("/api/chat/:id", authenticate, updateChatMessage);
+  app.delete("/api/chat/:id", authenticate, deleteChat);
+  
+  // Notification routes
+  app.get("/api/notifications", authenticate, getNotifications);
+  app.put("/api/notification/:id", authenticate, markNotificationAsRead);
+  app.put("/api/notifications/markAllRead", authenticate, markAllNotificationsAsRead);
+  app.post("/api/notification", authenticate, createNotification);
+  
+  // User profile routes
+  app.get("/api/profile", authenticate, getUserProfile);
+  app.put("/api/profile", authenticate, uploadProfileImage.single('profileImage'), updateUserProfile);
+  app.put("/api/location", authenticate, updateUserLocation);
+  app.get("/api/search/users", authenticate, searchUsers);
 
   const httpServer = createServer(app);
+  
+  // Setup WebSocket server
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  // Client connections map to track user connections
+  const clients = new Map<number, WebSocket[]>();
+  
+  wss.on('connection', (ws: WebSocket) => {
+    console.log('New WebSocket connection established');
+    let userId: number | null = null;
+    
+    ws.on('message', (message: string) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        // Handle authentication on connection
+        if (data.type === 'auth') {
+          userId = parseInt(data.userId);
+          
+          // Store the connection
+          if (!clients.has(userId)) {
+            clients.set(userId, []);
+          }
+          clients.get(userId)?.push(ws);
+          
+          console.log(`User ${userId} authenticated via WebSocket`);
+          // Send confirmation
+          ws.send(JSON.stringify({ 
+            type: 'auth_success', 
+            message: 'Authentication successful' 
+          }));
+        }
+        
+        // Handle chat messages
+        else if (data.type === 'chat') {
+          const { recipientId, message: chatMessage, senderId } = data;
+          
+          // Forward message to recipient if online
+          if (clients.has(recipientId)) {
+            clients.get(recipientId)?.forEach(client => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'chat',
+                  senderId,
+                  message: chatMessage,
+                  timestamp: new Date().toISOString()
+                }));
+              }
+            });
+          }
+          
+          // Store message in database (handled by the chat controller)
+          // This would be an HTTP request or direct DB call
+        }
+        
+        // Handle notification permission request
+        else if (data.type === 'notification_permission') {
+          if (userId) {
+            // Update user's notification permission in database
+            // For now, just acknowledge
+            ws.send(JSON.stringify({
+              type: 'notification_permission_update',
+              status: 'success'
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
+    });
+    
+    ws.on('close', () => {
+      console.log('WebSocket connection closed');
+      
+      // Remove client from connections
+      if (userId && clients.has(userId)) {
+        const userConnections = clients.get(userId) || [];
+        const index = userConnections.indexOf(ws);
+        if (index !== -1) {
+          userConnections.splice(index, 1);
+        }
+        
+        // Clean up empty user entries
+        if (userConnections.length === 0) {
+          clients.delete(userId);
+        }
+      }
+    });
+  });
+  
+  // Export broadcast function to send notifications to users
+  (global as any).sendNotification = (userId: number, notification: any) => {
+    if (clients.has(userId)) {
+      clients.get(userId)?.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({
+            type: 'notification',
+            ...notification
+          }));
+        }
+      });
+    }
+  };
   
   return httpServer;
 }

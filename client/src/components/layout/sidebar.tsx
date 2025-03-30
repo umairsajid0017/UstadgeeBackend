@@ -66,8 +66,8 @@ export default function Sidebar({ className, onCollapseChange }: SidebarNavProps
       icon: Briefcase,
     },
     {
-      name: "Messages",
-      href: "/messages",
+      name: "Chat",
+      href: "/chat",
       icon: MessageSquare,
     },
     {

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Bell, Search, User } from "lucide-react";
+import { Search, User, Bell } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -12,12 +12,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Link } from "wouter";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 interface HeaderProps {
   title: string;
+  description?: string;
 }
 
-export default function Header({ title }: HeaderProps) {
+export default function Header({ title, description }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -38,8 +40,13 @@ export default function Header({ title }: HeaderProps) {
       <div className="flex flex-1 items-center justify-between">
         <div className="md:hidden w-8"></div>
         
-        {/* Title */}
-        <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">{title}</h1>
+        {/* Title and Description */}
+        <div>
+          <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">{title}</h1>
+          {description && (
+            <p className="text-xs text-muted-foreground mt-1 hidden md:block">{description}</p>
+          )}
+        </div>
         
         <div className="ml-auto flex items-center gap-2">
           {/* Search (hidden on mobile) */}
@@ -56,13 +63,8 @@ export default function Header({ title }: HeaderProps) {
             />
           </form>
           
-          {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative hover:bg-primary/10 transition-colors" asChild>
-            <Link href="/notifications">
-              <Bell className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
-            </Link>
-          </Button>
+          {/* Notification Center */}
+          <NotificationCenter />
           
           {/* User Menu */}
           <DropdownMenu>
