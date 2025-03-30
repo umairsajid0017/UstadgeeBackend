@@ -60,16 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (data) => {
-      if (data.success && data.data?.token) {
+      if (data.success && data.user) {
         // Store token in localStorage
-        localStorage.setItem("token", data.data.token);
-        // Invalidate the user query to refetch user data
-        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+        localStorage.setItem("token", data.token);
+        // Update user data directly
+        queryClient.setQueryData(["/api/user"], { success: true, user: data.user });
         
         toast({
           title: "Login successful",
           description: "Welcome back!",
         });
+        
+        // Force redirect to home page
+        window.location.href = "/";
       }
     },
     onError: (error: Error) => {
@@ -87,16 +90,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (data) => {
-      if (data.success && data.data?.token) {
+      if (data.success && data.user) {
         // Store token in localStorage
-        localStorage.setItem("token", data.data.token);
-        // Invalidate the user query to refetch user data
-        queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+        localStorage.setItem("token", data.token);
+        // Update user data directly
+        queryClient.setQueryData(["/api/user"], { success: true, user: data.user });
         
         toast({
-          title: "Registration successful",
+          title: "Registration successful", 
           description: "Your account has been created",
         });
+        
+        // Force redirect to home page
+        window.location.href = "/";
       }
     },
     onError: (error: Error) => {

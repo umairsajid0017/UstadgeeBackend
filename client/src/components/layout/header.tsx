@@ -34,12 +34,12 @@ export default function Header({ title }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center bg-white border-b px-4 md:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center bg-card/50 backdrop-blur-sm border-b border-primary/20 px-4 md:px-6 shadow-sm">
       <div className="flex flex-1 items-center justify-between">
         <div className="md:hidden w-8"></div>
         
         {/* Title */}
-        <h1 className="text-xl font-semibold">{title}</h1>
+        <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">{title}</h1>
         
         <div className="ml-auto flex items-center gap-2">
           {/* Search (hidden on mobile) */}
@@ -47,28 +47,28 @@ export default function Header({ title }: HeaderProps) {
             onSubmit={handleSearch}
             className="hidden md:flex items-center relative mr-2"
           >
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-primary/60 h-4 w-4" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-64 pl-9"
+              className="w-64 pl-9 bg-card/50 border-primary/20 focus:border-primary/50 transition-colors duration-300"
             />
           </form>
           
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative" asChild>
+          <Button variant="ghost" size="icon" className="relative hover:bg-primary/10 transition-colors" asChild>
             <Link href="/notifications">
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+              <Bell className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
             </Link>
           </Button>
           
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <div className="h-8 w-8 rounded-full overflow-hidden bg-muted">
+              <Button variant="ghost" size="icon" className="hover:bg-primary/10 transition-colors">
+                <div className="h-9 w-9 rounded-full overflow-hidden border border-primary/30">
                   {user?.profileImage ? (
                     <img 
                       src={`/uploads/profiles/${user.profileImage}`} 
@@ -83,24 +83,24 @@ export default function Header({ title }: HeaderProps) {
                 </div>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="bg-card/90 backdrop-blur-md border-primary/20">
               <DropdownMenuLabel>
                 <div className="flex flex-col">
-                  <span>{user?.fullName}</span>
-                  <span className="text-xs text-muted-foreground">{user?.phoneNumber}</span>
+                  <span className="font-semibold">{user?.fullName}</span>
+                  <span className="text-xs text-primary/80">{user?.phoneNumber}</span>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/profile">Profile</Link>
+              <DropdownMenuSeparator className="bg-primary/20" />
+              <DropdownMenuItem asChild className="focus:bg-primary/10 focus:text-primary cursor-pointer">
+                <Link href="/profile" className="w-full">Profile</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/settings">Settings</Link>
+              <DropdownMenuItem asChild className="focus:bg-primary/10 focus:text-primary cursor-pointer">
+                <Link href="/settings" className="w-full">Settings</Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-primary/20" />
               <DropdownMenuItem 
                 onClick={handleLogout}
-                className="text-red-500 focus:text-red-500"
+                className="text-red-500 hover:text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer"
               >
                 Logout
               </DropdownMenuItem>
