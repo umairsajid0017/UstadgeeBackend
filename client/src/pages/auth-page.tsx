@@ -40,11 +40,6 @@ export default function AuthPage() {
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
   
-  // If user is already logged in, redirect to home
-  if (user) {
-    return <Redirect to="/" />;
-  }
-
   // Initialize login form
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -64,6 +59,11 @@ export default function AuthPage() {
       userTypeId: 1, // Default to regular user
     },
   });
+  
+  // If user is already logged in, redirect to home
+  if (user) {
+    return <Redirect to="/" />;
+  }
 
   // Handle login form submission
   const onLoginSubmit = (values: z.infer<typeof loginSchema>) => {
