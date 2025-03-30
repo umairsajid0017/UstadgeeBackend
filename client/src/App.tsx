@@ -8,6 +8,7 @@ import HomePage from "@/pages/home-page";
 import ServicesPage from "@/pages/services-page";
 import TasksPage from "@/pages/tasks-page";
 import DashboardPage from "@/pages/dashboard-page";
+import AdminDashboard from "@/pages/admin/dashboard";
 import { ProtectedRoute } from "./lib/protected-route";
 import { AuthProvider } from "./hooks/use-auth";
 
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <ProtectedRoute path="/" component={HomePage} />
       <ProtectedRoute path="/dashboard" component={DashboardPage} />
+      <ProtectedRoute path="/admin" component={AdminDashboard} />
       <ProtectedRoute path="/services" component={ServicesPage} />
       <ProtectedRoute path="/tasks" component={TasksPage} />
       <Route component={NotFound} />

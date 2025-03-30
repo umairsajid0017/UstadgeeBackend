@@ -2,6 +2,115 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Futuristic Admin Dashboard Styles */
+@layer base {
+  body {
+    @apply bg-black text-white;
+  }
+}
+
+@layer components {
+  /* Custom Scrollbar */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* Glowing elements */
+  .glow {
+    box-shadow: 0 0 10px theme('colors.primary.DEFAULT'), 0 0 20px theme('colors.primary.DEFAULT/20');
+  }
+  
+  .glow-text {
+    text-shadow: 0 0 10px theme('colors.primary.DEFAULT'), 0 0 20px theme('colors.primary.DEFAULT/20');
+  }
+  
+  /* Futuristic card */
+  .card-futuristic {
+    @apply relative overflow-hidden rounded-lg border border-border/30 bg-black p-6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+  
+  .card-futuristic::before {
+    content: '';
+    @apply absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-primary/80 via-primary to-primary/80;
+  }
+  
+  .grid-item-highlight {
+    @apply transition-all duration-300;
+  }
+  
+  .grid-item-highlight:hover {
+    @apply translate-y-[-5px] border-primary/50 glow;
+  }
+  
+  /* Admin section titles */
+  .section-title {
+    @apply text-2xl font-bold text-white relative pb-2 mb-6 inline-block;
+  }
+  
+  .section-title::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-[2px] w-full bg-gradient-to-r from-primary via-primary/50 to-transparent;
+  }
+}
+
+@layer utilities {
+  /* Background grid pattern */
+  .bg-grid {
+    background-image: linear-gradient(theme('colors.primary.DEFAULT/5') 1px, transparent 1px),
+                     linear-gradient(90deg, theme('colors.primary.DEFAULT/5') 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  
+  /* Neon borders */
+  .neon-border {
+    @apply border border-primary/50 relative;
+  }
+  
+  .neon-border::before {
+    content: '';
+    @apply absolute inset-0 border border-primary/20 blur-[2px];
+  }
+  
+  /* Animated hover border */
+  .animated-border {
+    @apply relative overflow-hidden;
+  }
+  
+  .animated-border::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-[2px] w-0 bg-primary transition-all duration-300;
+  }
+  
+  .animated-border:hover::after {
+    @apply w-full;
+  }
+  
+  /* Animated background */
+  .bg-animate {
+    background: linear-gradient(-45deg, theme('colors.primary.DEFAULT/15'), transparent, theme('colors.primary.DEFAULT/10'), transparent);
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+  
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
