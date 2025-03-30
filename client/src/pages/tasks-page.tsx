@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import Header from "@/components/layout/header";
-import Sidebar from "@/components/layout/sidebar";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -14,7 +13,8 @@ import {
   Map, 
   Star,
   CheckSquare, 
-  XCircle
+  XCircle,
+  Play
 } from "lucide-react";
 import { format } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -187,35 +187,39 @@ export default function TasksPage() {
   const isLoading = isLoadingActive || isLoadingCompleted;
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      
-      <div className="flex-1">
-        <Header title="Tasks" />
-        
-        <main className="p-6">
-          <Tabs defaultValue="active" className="mb-6">
-            <TabsList>
-              <TabsTrigger value="active">Active Tasks</TabsTrigger>
+    <AdminLayout title="Tasks">
+      <Tabs defaultValue="active" className="mb-6">
+            <TabsList className="bg-card/50 backdrop-blur-sm border border-primary/20">
+              <TabsTrigger 
+                value="active" 
+                className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none"
+              >
+                Active Tasks
+              </TabsTrigger>
               {user?.userTypeId === 1 && (
-                <TabsTrigger value="completed">Completed Tasks</TabsTrigger>
+                <TabsTrigger 
+                  value="completed" 
+                  className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none"
+                >
+                  Completed Tasks
+                </TabsTrigger>
               )}
             </TabsList>
             
             {/* Active Tasks Tab */}
             <TabsContent value="active">
-              <h2 className="text-2xl font-bold mb-6">
+              <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                 {user?.userTypeId === 1 ? "My Requests" : "Assigned Tasks"}
               </h2>
               
               {isLoadingActive ? (
                 <div className="flex justify-center my-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" />
                 </div>
               ) : !activeTasks || activeTasks.data.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-lg border">
-                  <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <Clock className="h-8 w-8 text-gray-400" />
+                <div className="text-center py-12 bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg shadow-lg">
+                  <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 border border-primary/30">
+                    <Clock className="h-8 w-8 text-primary" />
                   </div>
                   <h3 className="text-lg font-medium mb-2">No active tasks found</h3>
                   <p className="text-muted-foreground">
@@ -227,8 +231,8 @@ export default function TasksPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {activeTasks.data.map((task: any) => (
-                    <Card key={task.id} className="overflow-hidden">
-                      <CardContent className="p-4">
+                    <Card key={task.id} className="overflow-hidden bg-card/50 backdrop-blur-sm border-primary/20 shadow-lg hover:shadow-primary/10 transition-all duration-300">
+                      <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <h3 className="font-medium truncate">
@@ -238,20 +242,20 @@ export default function TasksPage() {
                               Request #{task.id}
                             </p>
                           </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            task.status === 'Pending' ? 'bg-amber-100 text-amber-800' :
-                            task.status === 'Accepted' ? 'bg-blue-100 text-blue-800' :
-                            task.status === 'In Progress' ? 'bg-indigo-100 text-indigo-800' :
-                            task.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                            'bg-red-100 text-red-800'
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            task.status === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30' :
+                            task.status === 'Accepted' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30' :
+                            task.status === 'In Progress' ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/30' :
+                            task.status === 'Completed' ? 'bg-green-500/10 text-green-500 border border-green-500/30' :
+                            'bg-red-500/10 text-red-500 border border-red-500/30'
                           }`}>
                             {task.status}
                           </span>
                         </div>
                         
-                        <div className="space-y-3 mb-4">
+                        <div className="space-y-3 mb-5">
                           <div className="flex items-start">
-                            <Clock className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                            <Clock className="h-4 w-4 text-primary mt-0.5 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Estimated Time</p>
                               <p className="text-sm text-muted-foreground">
@@ -261,7 +265,7 @@ export default function TasksPage() {
                           </div>
                           
                           <div className="flex items-start">
-                            <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                            <Calendar className="h-4 w-4 text-primary mt-0.5 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Arrival Time</p>
                               <p className="text-sm text-muted-foreground">
@@ -271,7 +275,7 @@ export default function TasksPage() {
                           </div>
                           
                           <div className="flex items-start">
-                            <PanelRight className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                            <PanelRight className="h-4 w-4 text-primary mt-0.5 mr-2" />
                             <div>
                               <p className="text-sm font-medium">Description</p>
                               <p className="text-sm text-muted-foreground line-clamp-2">
@@ -281,11 +285,15 @@ export default function TasksPage() {
                           </div>
                         </div>
                         
-                        <div className="flex justify-between items-center pt-3 border-t">
-                          <div className="font-semibold">
+                        <div className="flex justify-between items-center pt-4 border-t border-primary/10">
+                          <div className="font-semibold text-primary">
                             ₹{task.totalAmount}
                           </div>
-                          <Button size="sm" onClick={() => handleViewTask(task)}>
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleViewTask(task)}
+                            className="bg-primary/90 hover:bg-primary text-white shadow-md shadow-primary/20"
+                          >
                             View Details
                           </Button>
                         </div>
@@ -299,16 +307,18 @@ export default function TasksPage() {
             {/* Completed Tasks Tab (only for regular users) */}
             {user?.userTypeId === 1 && (
               <TabsContent value="completed">
-                <h2 className="text-2xl font-bold mb-6">Completed Requests</h2>
+                <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                  Completed Requests
+                </h2>
                 
                 {isLoadingCompleted ? (
                   <div className="flex justify-center my-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
                   </div>
                 ) : !completedTasks || completedTasks.data.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-lg border">
-                    <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                      <CheckCircle className="h-8 w-8 text-gray-400" />
+                  <div className="text-center py-12 bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg shadow-lg">
+                    <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 border border-primary/30">
+                      <CheckCircle className="h-8 w-8 text-primary" />
                     </div>
                     <h3 className="text-lg font-medium mb-2">No completed tasks found</h3>
                     <p className="text-muted-foreground">
@@ -318,8 +328,8 @@ export default function TasksPage() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {completedTasks.data.map((task: any) => (
-                      <Card key={task.id} className="overflow-hidden">
-                        <CardContent className="p-4">
+                      <Card key={task.id} className="overflow-hidden bg-card/50 backdrop-blur-sm border-primary/20 shadow-lg hover:shadow-primary/10 transition-all duration-300">
+                        <CardContent className="p-5">
                           <div className="flex justify-between items-start mb-4">
                             <div>
                               <h3 className="font-medium truncate">
@@ -329,16 +339,17 @@ export default function TasksPage() {
                                 Request #{task.id}
                               </p>
                             </div>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              task.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              task.status === 'Completed' ? 'bg-green-500/10 text-green-500 border border-green-500/30' : 
+                              'bg-red-500/10 text-red-500 border border-red-500/30'
                             }`}>
                               {task.status}
                             </span>
                           </div>
                           
-                          <div className="space-y-3 mb-4">
+                          <div className="space-y-3 mb-5">
                             <div className="flex items-start">
-                              <Map className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                              <Map className="h-4 w-4 text-primary mt-0.5 mr-2" />
                               <div>
                                 <p className="text-sm font-medium">Service Provider</p>
                                 <p className="text-sm text-muted-foreground">
@@ -348,7 +359,7 @@ export default function TasksPage() {
                             </div>
                             
                             <div className="flex items-start">
-                              <Clock className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                              <Clock className="h-4 w-4 text-primary mt-0.5 mr-2" />
                               <div>
                                 <p className="text-sm font-medium">Estimated Time</p>
                                 <p className="text-sm text-muted-foreground">
@@ -358,7 +369,7 @@ export default function TasksPage() {
                             </div>
                             
                             <div className="flex items-start">
-                              <PanelRight className="h-4 w-4 text-muted-foreground mt-0.5 mr-2" />
+                              <PanelRight className="h-4 w-4 text-primary mt-0.5 mr-2" />
                               <div>
                                 <p className="text-sm font-medium">Description</p>
                                 <p className="text-sm text-muted-foreground line-clamp-2">
@@ -368,8 +379,8 @@ export default function TasksPage() {
                             </div>
                           </div>
                           
-                          <div className="flex justify-between items-center pt-3 border-t">
-                            <div className="font-semibold">
+                          <div className="flex justify-between items-center pt-4 border-t border-primary/10">
+                            <div className="font-semibold text-primary">
                               ₹{task.totalAmount}
                             </div>
                             {task.status === 'Completed' && (
@@ -377,8 +388,9 @@ export default function TasksPage() {
                                 size="sm" 
                                 onClick={() => handleOpenReviewDialog(task)}
                                 variant="outline"
+                                className="border-primary/30 hover:bg-primary/10 hover:border-primary/50"
                               >
-                                <Star className="h-4 w-4 mr-1" />
+                                <Star className="h-4 w-4 mr-1 text-yellow-500" />
                                 Review
                               </Button>
                             )}
@@ -391,34 +403,33 @@ export default function TasksPage() {
               </TabsContent>
             )}
           </Tabs>
-        </main>
-      </div>
-      
       {/* Task Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl bg-card/95 backdrop-blur-md border-primary/20">
           <DialogHeader>
-            <DialogTitle>Task Details</DialogTitle>
+            <DialogTitle className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              Task Details
+            </DialogTitle>
           </DialogHeader>
           
           {selectedTask && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">
+                <div className="bg-background/50 p-5 rounded-lg border border-primary/10 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                     {selectedTask.service?.title || "Service Request"}
                   </h3>
                   
                   <div className="space-y-4">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Status</p>
+                      <p className="text-sm font-medium text-primary/70">Status</p>
                       <p className="font-medium">
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
-                          selectedTask.status === 'Pending' ? 'bg-amber-100 text-amber-800' :
-                          selectedTask.status === 'Accepted' ? 'bg-blue-100 text-blue-800' :
-                          selectedTask.status === 'In Progress' ? 'bg-indigo-100 text-indigo-800' :
-                          selectedTask.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                          'bg-red-100 text-red-800'
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${
+                          selectedTask.status === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/30' :
+                          selectedTask.status === 'Accepted' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/30' :
+                          selectedTask.status === 'In Progress' ? 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/30' :
+                          selectedTask.status === 'Completed' ? 'bg-green-500/10 text-green-500 border border-green-500/30' :
+                          'bg-red-500/10 text-red-500 border border-red-500/30'
                         }`}>
                           {selectedTask.status}
                         </span>
@@ -426,39 +437,39 @@ export default function TasksPage() {
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Description</p>
-                      <p>{selectedTask.description}</p>
+                      <p className="text-sm font-medium text-primary/70">Description</p>
+                      <p className="text-muted-foreground">{selectedTask.description}</p>
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Estimated Time</p>
-                      <p>{selectedTask.estTime} {selectedTask.estTime === 1 ? 'hour' : 'hours'}</p>
+                      <p className="text-sm font-medium text-primary/70">Estimated Time</p>
+                      <p className="text-muted-foreground">{selectedTask.estTime} {selectedTask.estTime === 1 ? 'hour' : 'hours'}</p>
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Total Amount</p>
-                      <p className="font-semibold">₹{selectedTask.totalAmount}</p>
+                      <p className="text-sm font-medium text-primary/70">Total Amount</p>
+                      <p className="font-semibold text-primary">₹{selectedTask.totalAmount}</p>
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Expected Arrival</p>
-                      <p>{format(new Date(selectedTask.arrivalTime), "PPP p")}</p>
+                      <p className="text-sm font-medium text-primary/70">Expected Arrival</p>
+                      <p className="text-muted-foreground">{format(new Date(selectedTask.arrivalTime), "PPP p")}</p>
                     </div>
                     
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Offer Expires</p>
-                      <p>{format(new Date(selectedTask.offerExpirationDate), "PPP p")}</p>
+                      <p className="text-sm font-medium text-primary/70">Offer Expires</p>
+                      <p className="text-muted-foreground">{format(new Date(selectedTask.offerExpirationDate), "PPP p")}</p>
                     </div>
                   </div>
                 </div>
                 
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">
+                <div className="bg-background/50 p-5 rounded-lg border border-primary/10 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                     {user?.userTypeId === 1 ? "Service Provider" : "Requester"}
                   </h3>
                   
                   <div className="flex items-center mb-4">
-                    <div className="h-16 w-16 rounded-full overflow-hidden bg-gray-100 mr-3">
+                    <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-primary/20 shadow-lg shadow-primary/10 mr-3">
                       {user?.userTypeId === 1 && selectedTask.worker?.profileImage ? (
                         <img 
                           src={`/uploads/profiles/${selectedTask.worker.profileImage}`} 
@@ -511,20 +522,20 @@ export default function TasksPage() {
                   
                   {/* Action buttons based on user type and task status */}
                   {user?.userTypeId !== 1 && selectedTask.status === 'Pending' && (
-                    <div className="flex gap-2 mt-6">
+                    <div className="flex gap-3 mt-6">
                       <Button 
-                        className="flex-1"
+                        className="flex-1 bg-primary/90 hover:bg-primary shadow-lg shadow-primary/20 group"
                         onClick={() => handleUpdateStatus(selectedTask.id, 2)} // Accept (status 2)
                       >
-                        <CheckSquare className="h-4 w-4 mr-1" />
+                        <CheckSquare className="h-5 w-5 mr-2 group-hover:animate-pulse" />
                         Accept
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="flex-1 text-red-500 hover:text-red-700"
+                        className="flex-1 text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 group"
                         onClick={() => handleUpdateStatus(selectedTask.id, 5)} // Cancel (status 5)
                       >
-                        <XCircle className="h-4 w-4 mr-1" />
+                        <XCircle className="h-5 w-5 mr-2 group-hover:animate-pulse" />
                         Decline
                       </Button>
                     </div>
@@ -533,9 +544,10 @@ export default function TasksPage() {
                   {user?.userTypeId !== 1 && selectedTask.status === 'Accepted' && (
                     <div className="mt-6">
                       <Button 
-                        className="w-full"
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20 group"
                         onClick={() => handleUpdateStatus(selectedTask.id, 3)} // In Progress (status 3)
                       >
+                        <Play className="h-5 w-5 mr-2 group-hover:animate-pulse" />
                         Start Work
                       </Button>
                     </div>
@@ -544,10 +556,10 @@ export default function TasksPage() {
                   {user?.userTypeId !== 1 && selectedTask.status === 'In Progress' && (
                     <div className="mt-6">
                       <Button 
-                        className="w-full"
+                        className="w-full bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20 group"
                         onClick={() => handleUpdateStatus(selectedTask.id, 4)} // Completed (status 4)
                       >
-                        <CheckCircle className="h-4 w-4 mr-1" />
+                        <CheckCircle className="h-5 w-5 mr-2 group-hover:animate-pulse" />
                         Mark as Completed
                       </Button>
                     </div>
@@ -557,9 +569,10 @@ export default function TasksPage() {
                     <div className="mt-6">
                       <Button 
                         variant="outline" 
-                        className="w-full text-red-500 hover:text-red-700"
+                        className="w-full text-red-500 border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50 hover:text-red-400 group"
                         onClick={() => handleUpdateStatus(selectedTask.id, 5)} // Cancel (status 5)
                       >
+                        <XCircle className="h-5 w-5 mr-2 group-hover:animate-pulse" />
                         Cancel Request
                       </Button>
                     </div>
@@ -573,9 +586,11 @@ export default function TasksPage() {
       
       {/* Review Dialog */}
       <Dialog open={isReviewDialogOpen} onOpenChange={setIsReviewDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-card/95 backdrop-blur-md border-primary/20">
           <DialogHeader>
-            <DialogTitle>Leave a Review</DialogTitle>
+            <DialogTitle className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              Leave a Review
+            </DialogTitle>
             <DialogDescription>
               Share your experience with this service provider
             </DialogDescription>
@@ -583,8 +598,8 @@ export default function TasksPage() {
           
           {selectedTask && (
             <div className="space-y-6">
-              <div className="flex items-center mb-2">
-                <div className="h-12 w-12 rounded-full overflow-hidden bg-gray-100 mr-3">
+              <div className="flex items-center mb-4 p-4 bg-background/50 rounded-lg border border-primary/10">
+                <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-primary/20 shadow-lg shadow-primary/10 mr-3">
                   {selectedTask.worker?.profileImage ? (
                     <img 
                       src={`/uploads/profiles/${selectedTask.worker.profileImage}`} 
@@ -593,7 +608,7 @@ export default function TasksPage() {
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                      <span className="text-primary font-bold">
+                      <span className="text-primary font-bold text-xl">
                         {selectedTask.worker?.fullName?.charAt(0) || 'U'}
                       </span>
                     </div>
@@ -608,9 +623,9 @@ export default function TasksPage() {
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium mb-2">Rating</label>
-                <div className="flex items-center space-x-1">
+              <div className="bg-background/50 p-4 rounded-lg border border-primary/10">
+                <label className="block text-sm font-medium mb-3 text-primary/70">Rating</label>
+                <div className="flex items-center space-x-2 justify-center">
                   <TooltipProvider>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Tooltip key={star}>
@@ -618,18 +633,18 @@ export default function TasksPage() {
                           <button
                             type="button"
                             onClick={() => setRating(star)}
-                            className="focus:outline-none"
+                            className="focus:outline-none transform transition-transform hover:scale-110"
                           >
                             <Star 
-                              className={`h-8 w-8 ${
+                              className={`h-10 w-10 ${
                                 star <= rating 
-                                  ? 'text-yellow-400 fill-yellow-400' 
-                                  : 'text-gray-300'
+                                  ? 'text-yellow-400 fill-yellow-400 drop-shadow-md' 
+                                  : 'text-gray-500/50'
                               }`} 
                             />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent>
+                        <TooltipContent className="bg-card/90 backdrop-blur-md border-primary/20">
                           {star === 1 ? 'Poor' : 
                            star === 2 ? 'Fair' : 
                            star === 3 ? 'Good' : 
@@ -641,30 +656,32 @@ export default function TasksPage() {
                 </div>
               </div>
               
-              <div>
-                <label htmlFor="comment" className="block text-sm font-medium mb-2">
+              <div className="bg-background/50 p-4 rounded-lg border border-primary/10">
+                <label htmlFor="comment" className="block text-sm font-medium mb-2 text-primary/70">
                   Comment (Optional)
                 </label>
                 <textarea
                   id="comment"
-                  rows={3}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  rows={4}
+                  className="w-full rounded-md border border-primary/20 bg-card/50 backdrop-blur-sm px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 focus-visible:border-primary/50"
                   placeholder="Share your experience..."
                   value={reviewComment}
                   onChange={(e) => setReviewComment(e.target.value)}
                 />
               </div>
               
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 pt-2">
                 <Button 
                   variant="outline" 
                   onClick={() => setIsReviewDialogOpen(false)}
+                  className="border-primary/30 hover:bg-primary/10 hover:border-primary/50"
                 >
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleSubmitReview}
                   disabled={addReviewMutation.isPending}
+                  className="bg-primary/90 hover:bg-primary shadow-lg shadow-primary/20"
                 >
                   {addReviewMutation.isPending ? (
                     <>
@@ -680,6 +697,6 @@ export default function TasksPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminLayout>
   );
 }

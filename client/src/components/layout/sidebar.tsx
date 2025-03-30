@@ -13,22 +13,31 @@ import {
   X,
   MessageSquare,
   Bell,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface SidebarNavProps extends React.HTMLAttributes<HTMLElement> {
   className?: string;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
-export default function Sidebar({ className }: SidebarNavProps) {
+export default function Sidebar({ className, onCollapseChange }: SidebarNavProps) {
   const { user, logoutMutation } = useAuth();
   const [location] = useLocation();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   
   // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location]);
+  
+  // Notify parent about collapse state changes
+  useEffect(() => {
+    onCollapseChange?.(isCollapsed);
+  }, [isCollapsed, onCollapseChange]);
   
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -89,29 +98,61 @@ export default function Sidebar({ className }: SidebarNavProps) {
       {/* Sidebar */}
       <nav
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex-col bg-card/50 backdrop-blur-sm border-r border-primary/20 w-64 p-4 transition-transform duration-300 md:translate-x-0 shadow-lg shadow-black/50",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 left-0 z-40 flex-col bg-card/50 backdrop-blur-sm border-r border-primary/20 p-4 transition-all duration-300 md:translate-x-0 shadow-lg shadow-black/50",
+          isCollapsed ? "w-20" : "w-64",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
           className
         )}
       >
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col relative">
+          {/* Toggle Collapse Button (Desktop only) */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute -right-4 top-5 h-8 w-8 rounded-full bg-card border border-primary/20 shadow-md hidden md:flex"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4 text-primary" />
+            ) : (
+              <ChevronLeft className="h-4 w-4 text-primary" />
+            )}
+          </Button>
+          
           {/* Logo */}
-          <div className="flex items-center h-16 px-3">
-            <Link href="/" className="flex items-center group">
+          <div className={cn(
+            "flex items-center h-16",
+            isCollapsed ? "justify-center px-0" : "px-3"
+          )}>
+            <Link href="/" className={cn(
+              "flex items-center group",
+              isCollapsed ? "justify-center" : ""
+            )}>
               <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/30 glow-primary group-hover:scale-110 transition-transform duration-300">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </div>
-              <span className="ml-2 text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">UstadGee</span>
+              {!isCollapsed && (
+                <span className="ml-2 text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">UstadGee</span>
+              )}
             </Link>
           </div>
           
           {/* User Info */}
           {user && (
-            <div className="px-3 py-4 border-t border-primary/10">
-              <div className="flex items-center">
-                <div className="h-10 w-10 rounded-full overflow-hidden border border-primary/30 mr-3">
+            <div className={cn(
+              "py-4 border-t border-primary/10", 
+              isCollapsed ? "px-0 flex justify-center" : "px-3"
+            )}>
+              <div className={cn(
+                "flex items-center",
+                isCollapsed ? "flex-col" : ""
+              )}>
+                <div className={cn(
+                  "rounded-full overflow-hidden border border-primary/30",
+                  isCollapsed ? "h-10 w-10 mb-2" : "h-10 w-10 mr-3"
+                )}>
                   {user.profileImage ? (
                     <img 
                       src={`/uploads/profiles/${user.profileImage}`} 
@@ -125,57 +166,77 @@ export default function Sidebar({ className }: SidebarNavProps) {
                   )}
                 </div>
                 
-                <div>
-                  <p className="font-medium text-white">{user.fullName}</p>
-                  <p className="text-xs text-primary/80">
-                    {user.userTypeId === 1 ? "User" : user.userTypeId === 2 ? "Ustadgee" : "Karigar"}
-                  </p>
-                </div>
+                {!isCollapsed && (
+                  <div>
+                    <p className="font-medium text-white">{user.fullName}</p>
+                    <p className="text-xs text-primary/80">
+                      {user.userTypeId === 1 ? "User" : user.userTypeId === 2 ? "Ustadgee" : "Karigar"}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
           
           {/* Navigation Links */}
-          <div className="mt-4 space-y-1 flex-1">
+          <div className={cn(
+            "mt-4 space-y-1 flex-1",
+            isCollapsed ? "px-0" : ""
+          )}>
             {navItems.map((item) => (
               <Link key={item.href} href={item.href}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium hover:bg-primary/10 transition-all duration-200 relative group overflow-hidden",
+                    "flex items-center rounded-md py-2.5 text-sm font-medium hover:bg-primary/10 transition-all duration-200 relative group overflow-hidden",
+                    isCollapsed ? "justify-center px-0" : "px-3 gap-3",
                     location === item.href
-                      ? "bg-primary/20 text-primary border-l-2 border-primary text-glow"
+                      ? "bg-primary/20 text-primary text-glow" + (isCollapsed ? "" : " border-l-2 border-primary")
                       : "text-muted-foreground"
                   )}
                 >
-                  <div className={cn(
-                    "absolute bottom-0 left-0 h-[2px] bg-primary transition-all duration-300 opacity-0",
-                    location === item.href ? "opacity-100 w-full" : "w-0 group-hover:w-full group-hover:opacity-100"
-                  )} />
+                  {!isCollapsed && (
+                    <div className={cn(
+                      "absolute bottom-0 left-0 h-[2px] bg-primary transition-all duration-300 opacity-0",
+                      location === item.href ? "opacity-100 w-full" : "w-0 group-hover:w-full group-hover:opacity-100"
+                    )} />
+                  )}
                   
                   <item.icon className={cn(
-                    "h-5 w-5 transition-transform duration-300",
+                    "transition-transform duration-300",
+                    isCollapsed ? "h-6 w-6" : "h-5 w-5",
                     location === item.href ? "text-primary" : "text-muted-foreground group-hover:text-primary group-hover:scale-110"
                   )} />
                   
-                  <span
-                    className={location === item.href ? "text-primary" : "group-hover:text-primary"}
-                  >
-                    {item.name}
-                  </span>
+                  {!isCollapsed && (
+                    <span
+                      className={location === item.href ? "text-primary" : "group-hover:text-primary"}
+                    >
+                      {item.name}
+                    </span>
+                  )}
                 </div>
               </Link>
             ))}
           </div>
           
           {/* Logout Button */}
-          <div className="border-t border-primary/10 pt-4 mt-auto">
+          <div className={cn(
+            "border-t border-primary/10 pt-4 mt-auto",
+            isCollapsed ? "px-0" : ""
+          )}>
             <Button 
               variant="ghost" 
-              className="w-full justify-start text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors duration-300"
+              className={cn(
+                "text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors duration-300",
+                isCollapsed ? "w-full justify-center px-0" : "w-full justify-start"
+              )}
               onClick={handleLogout}
             >
-              <LogOut className="h-5 w-5 mr-2" />
-              Log out
+              <LogOut className={cn(
+                "text-red-400",
+                isCollapsed ? "h-6 w-6" : "h-5 w-5 mr-2"
+              )} />
+              {!isCollapsed && "Log out"}
             </Button>
           </div>
         </div>

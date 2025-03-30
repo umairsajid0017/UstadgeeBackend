@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AdminLayout } from "@/components/layout/AdminLayout";
+import AdminLayout from "@/components/layout/AdminLayout";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
 import { Users, Activity, FileText, CreditCard, ChevronUp, Clock } from "lucide-react";
@@ -36,7 +36,7 @@ export default function AdminDashboard() {
   ];
   
   return (
-    <AdminLayout>
+    <AdminLayout title="Dashboard">
       <div className="space-y-8">
         <div className="flex justify-between items-center bg-zinc-900/50 p-6 rounded-lg border border-zinc-800/50 mb-8 shadow-lg">
           <div>

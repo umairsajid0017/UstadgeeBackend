@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import Header from "@/components/layout/header";
-import Sidebar from "@/components/layout/sidebar";
+import AdminLayout from "@/components/layout/AdminLayout";
 import ServiceForm from "@/components/forms/service-form";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -40,7 +39,7 @@ export default function ServicesPage() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   
   // Fetch services
-  const { data: servicesData, isLoading: isLoadingServices } = useQuery({
+  const { data: servicesData, isLoading: isLoadingServices } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ["/api/services", user?.id, selectedCategory],
     queryFn: async ({ queryKey }) => {
       const [base, userId, categoryId] = queryKey;
@@ -75,7 +74,7 @@ export default function ServicesPage() {
   });
   
   // Fetch categories
-  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery({
+  const { data: categoriesData, isLoading: isLoadingCategories } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ["/api/categories"],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!user,
@@ -131,141 +130,144 @@ export default function ServicesPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      
-      <div className="flex-1">
-        <Header title="Services" />
+    <AdminLayout title="Services">
+      {/* Action Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          {user?.userTypeId !== 1 ? "My Services" : "Available Services"}
+        </h1>
         
-        <main className="p-6">
-          {/* Action Bar */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-            <h1 className="text-2xl font-bold">
-              {user?.userTypeId !== 1 ? "My Services" : "Available Services"}
-            </h1>
-            
-            <div className="flex flex-wrap gap-2">
-              {/* Category Filter */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex items-center gap-2">
-                    <Filter className="h-4 w-4" />
-                    Filter by Category
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Categories</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleCategoryFilter(null)}>
-                    All Categories
-                  </DropdownMenuItem>
-                  {categories.map((category: any) => (
-                    <DropdownMenuItem 
-                      key={category.id}
-                      onClick={() => handleCategoryFilter(category.id)}
-                    >
-                      {category.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              
-              {/* Add Service Button (only for service providers) */}
-              {user?.userTypeId !== 1 && (
-                <Button onClick={handleCreateService}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Service
-                </Button>
-              )}
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          {/* Category Filter */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2 bg-card/50 backdrop-blur-sm border-primary/20 hover:bg-primary/10 hover:border-primary/30">
+                <Filter className="h-4 w-4 text-primary" />
+                Filter by Category
+                <ChevronDown className="h-4 w-4 text-primary" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-card/90 backdrop-blur-md border-primary/20">
+              <DropdownMenuLabel>Categories</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-primary/20" />
+              <DropdownMenuItem 
+                onClick={() => handleCategoryFilter(null)}
+                className="focus:bg-primary/10 focus:text-primary cursor-pointer"
+              >
+                All Categories
+              </DropdownMenuItem>
+              {categories.map((category: any) => (
+                <DropdownMenuItem 
+                  key={category.id}
+                  onClick={() => handleCategoryFilter(category.id)}
+                  className="focus:bg-primary/10 focus:text-primary cursor-pointer"
+                >
+                  {category.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           
-          {/* Service Grid */}
-          {isLoading ? (
-            <div className="flex justify-center my-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : services.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg border">
-              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Plus className="h-8 w-8 text-gray-400" />
-              </div>
-              <h3 className="text-lg font-medium mb-2">No services found</h3>
-              <p className="text-muted-foreground mb-6">
-                {user?.userTypeId !== 1 
-                  ? "Get started by adding your first service"
-                  : "No services are available at the moment"}
-              </p>
-              
-              {user?.userTypeId !== 1 && (
-                <Button onClick={handleCreateService}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Service
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {services.map((service: any) => (
-                <Card key={service.id} className="overflow-hidden">
-                  <CardContent className="p-0">
-                    <div className="h-40 bg-gray-100">
-                      {service.images && service.images.length > 0 ? (
-                        <img 
-                          src={`/uploads/services/${service.images[0].imageName}`} 
-                          alt={service.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                          <span className="text-primary font-bold text-3xl">{service.title.charAt(0)}</span>
-                        </div>
-                      )}
+          {/* Add Service Button (only for service providers) */}
+          {user?.userTypeId !== 1 && (
+            <Button onClick={handleCreateService} className="bg-primary/90 hover:bg-primary shadow-lg shadow-primary/20">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Service
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      {/* Service Grid */}
+      {isLoading ? (
+        <div className="flex justify-center my-12">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        </div>
+      ) : services.length === 0 ? (
+        <div className="text-center py-12 bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg shadow-lg">
+          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4 border border-primary/30">
+            <Plus className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-medium mb-2">No services found</h3>
+          <p className="text-muted-foreground mb-6">
+            {user?.userTypeId !== 1 
+              ? "Get started by adding your first service"
+              : "No services are available at the moment"}
+          </p>
+          
+          {user?.userTypeId !== 1 && (
+            <Button onClick={handleCreateService} className="bg-primary/90 hover:bg-primary shadow-lg shadow-primary/20">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Service
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {services.map((service: any) => (
+            <Card key={service.id} className="overflow-hidden bg-card/50 backdrop-blur-sm border-primary/20 shadow-lg hover:shadow-primary/10 transition-all duration-300">
+              <CardContent className="p-0">
+                <div className="h-40 bg-primary/5 relative group">
+                  {service.images && service.images.length > 0 ? (
+                    <img 
+                      src={`/uploads/services/${service.images[0].imageName}`} 
+                      alt={service.title}
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center bg-primary/10">
+                      <span className="text-primary font-bold text-3xl">{service.title.charAt(0)}</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </div>
+                
+                <div className="p-5">
+                  <h3 className="font-semibold text-lg mb-1 truncate">{service.title}</h3>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{service.description}</p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold text-primary">
+                      ₹{service.charges}
                     </div>
                     
-                    <div className="p-4">
-                      <h3 className="font-semibold text-lg mb-1 truncate">{service.title}</h3>
-                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{service.description}</p>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="bg-primary/90 hover:bg-primary text-white shadow-md shadow-primary/20">
+                        View Details
+                      </Button>
                       
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold">
-                          ₹{service.charges}
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">View</Button>
-                          
-                          {/* Edit and Delete options for own services */}
-                          {parseInt(service.userId) === user?.id && (
-                            <>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleEditService(service)}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                className="text-red-500 hover:text-red-700"
-                                onClick={() => setConfirmDelete(service.id)}
-                              >
-                                <Trash className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
+                      {/* Edit and Delete options for own services */}
+                      {parseInt(service.userId) === user?.id && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditService(service)}
+                            className="border-primary/30 hover:bg-primary/10 hover:border-primary/50"
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="text-red-500 hover:text-red-400 border-red-500/30 hover:bg-red-500/10 hover:border-red-500/50"
+                            onClick={() => setConfirmDelete(service.id)}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </main>
-      </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
       
       {/* Service Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -304,6 +306,6 @@ export default function ServicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </AdminLayout>
   );
 }
